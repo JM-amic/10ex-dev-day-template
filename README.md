@@ -4,7 +4,7 @@
 > run regenerates this branch. The machine-readable source of truth is [`runs.jsonl`](./runs.jsonl).
 > Deployed-environment E2E trends live separately on the [`e2e-history`](../../tree/e2e-history) branch.
 
-**Last updated:** 2026-07-07 21:24Z · 3 records · suites: `helm`, `seed`, `temporal`
+**Last updated:** 2026-07-07 21:31Z · 6 records · suites: `helm`, `seed`, `temporal`
 
 ![trend](./trend.svg)
 
@@ -12,16 +12,19 @@
 
 | Suite | Latest | When (UTC) | Pass 24h | Pass 7d | Green streak | Runs |
 |---|---|---|--:|--:|--:|--:|
-| `helm` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) | — | — | — | 0 | 1 |
-| `seed` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) | — | — | — | 0 | 1 |
-| `temporal` | ✅ `passed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) | 2026-07-07 21:24Z | 100% (1) | 100% (1) | 1 | 1 |
+| `helm` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) | — | — | — | 0 | 2 |
+| `seed` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) | — | — | — | 0 | 2 |
+| `temporal` | ✅ `passed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) | 2026-07-07 21:31Z | 100% (2) | 100% (2) | 2 | 2 |
 
 
 ## Recent runs
 
 | When (UTC) | Suite | Result | Pass | Fail | Skip | Duration | Commit | Run |
 |---|---|---|--:|--:|--:|--:|---|---|
+| 2026-07-07 21:31Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.7s | `3be463e` | [#2](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) |
 | 2026-07-07 21:24Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.2s | `d519edc` | [#1](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) |
+| — | `seed` | ❌ failed | 0 | 1 | 0 | — | `3be463e` | [#2](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) |
+| — | `helm` | ❌ failed | 151 | 2 | 0 | — | `3be463e` | [#2](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) |
 | — | `seed` | ❌ failed | 0 | 1 | 0 | — | `d519edc` | [#1](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) |
 | — | `helm` | ❌ failed | 151 | 2 | 0 | — | `d519edc` | [#1](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) |
 
