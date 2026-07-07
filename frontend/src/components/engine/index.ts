@@ -19,6 +19,7 @@ export { EngineInput as Input } from './forms/EngineInput';
 export { EngineSelect as Select } from './forms/EngineSelect';
 export { EngineCheckbox as Checkbox } from './forms/EngineCheckbox';
 export { EngineTextarea as Textarea } from './forms/EngineTextarea';
+export { EngineFileInput as FileInput } from './forms/EngineFileInput';
 
 // Actions
 export { EngineButton as Button } from './actions/EngineButton';

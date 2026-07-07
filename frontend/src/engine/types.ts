@@ -102,6 +102,12 @@ export interface SupabaseDataSource {
   enabled?: string;
   /** State keys that trigger refetch */
   refetchOn?: string[];
+  /** Polling interval in ms (react-query refetchInterval) */
+  refetchInterval?: number;
+  /** Dot-path (lodash `get` syntax) into the fetched row; polling stops once its value is in `pollUntilValues` */
+  pollUntilPath?: string;
+  /** Values of `pollUntilPath` that stop polling */
+  pollUntilValues?: unknown[];
 }
 
 /**
@@ -304,6 +310,8 @@ export interface ExpressionContext {
   index?: number;
   /** Form data context */
   form?: Record<string, unknown>;
+  /** State setter, injected into the context passed to custom action handlers */
+  setState?: (key: string, value: unknown) => void;
   /** Dynamic keys for custom iteration variables (e.g., "entity", "user") */
   [key: string]: unknown;
 }

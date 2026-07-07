@@ -236,7 +236,7 @@ export function createActionDispatcher(config: ActionDispatcherConfig) {
       ? resolveValue(action.payload, context)
       : undefined;
 
-    await handler(payload, context);
+    await handler(payload, { ...context, setState });
   }
 
   /**

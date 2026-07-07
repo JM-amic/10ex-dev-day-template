@@ -11,6 +11,7 @@ import { UIEngineContext } from './UIEngineContext';
 import { ComponentRenderer } from './ComponentRenderer';
 import { useDataSources } from './useDataSources';
 import { createActionDispatcher } from './ActionDispatcher';
+import type { CustomActionHandler } from './ActionDispatcher';
 import {
   evaluateExpression,
   createExpressionContext,
@@ -29,15 +30,19 @@ interface UIEngineProps {
   page: PageDefinition;
   /** Route parameters */
   params?: Record<string, string>;
+  /** Custom action handlers invoked by the `custom` action type */
+  customHandlers?: Record<string, CustomActionHandler>;
+  /** Overrides merged over page.state on initial mount (e.g. state restored from the URL) */
+  initialState?: Record<string, unknown>;
 }
 
 /**
  * UIEngine - Interprets JSON page definitions and renders component trees
  */
-export function UIEngine({ page, params = {} }: UIEngineProps) {
+export function UIEngine({ page, params = {}, customHandlers = {}, initialState }: UIEngineProps) {
   // Initialize page state
   const [state, setStateInternal] = useState<Record<string, unknown>>(
-    () => page.state || {}
+    () => ({ ...(page.state || {}), ...initialState })
   );
 
   // Modal state
@@ -118,8 +123,9 @@ export function UIEngine({ page, params = {} }: UIEngineProps) {
         refetch,
         openModal,
         closeModal,
+        customHandlers,
       }),
-    [setState, navigate, queryClient, refetch, openModal, closeModal]
+    [setState, navigate, queryClient, refetch, openModal, closeModal, customHandlers]
   );
 
   // Dispatch function that merges contexts

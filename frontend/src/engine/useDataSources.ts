@@ -6,6 +6,7 @@
 
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useCallback } from 'react';
+import { get } from 'lodash-es';
 import { supabase } from '@/data/supabase';
 import { executeSupabaseQuery, createQueryKey } from '@/data/queryBuilder';
 import { evaluateExpression } from './ExpressionEvaluator';
@@ -95,11 +96,19 @@ export function useDataSources(
       // Create query based on source type
       if (source.type === 'supabase') {
         const queryKey = createQueryKey(source, context);
+        const { refetchInterval, pollUntilPath, pollUntilValues } = source;
         return {
           queryKey: ['datasource', name, ...queryKey],
           queryFn: () => executeSupabaseQuery(supabase, source, context),
           enabled,
           staleTime: 1000 * 60 * 5, // 5 minutes
+          refetchInterval:
+            refetchInterval && pollUntilPath && pollUntilValues
+              ? (query: { state: { data: unknown } }) =>
+                  pollUntilValues.includes(get(query.state.data, pollUntilPath))
+                    ? false
+                    : refetchInterval
+              : refetchInterval,
         };
       }
 

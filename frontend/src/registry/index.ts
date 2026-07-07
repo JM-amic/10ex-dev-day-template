@@ -19,6 +19,7 @@ import {
   Select,
   Checkbox,
   Textarea,
+  FileInput,
   Button,
   Link,
   Alert,
@@ -46,6 +47,7 @@ export function createDefaultRegistry(): ComponentRegistry {
     Select,
     Checkbox,
     Textarea,
+    FileInput,
 
     // Actions
     Button,

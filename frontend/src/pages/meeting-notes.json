@@ -1,0 +1,261 @@
+{
+  "id": "meeting-notes",
+  "title": "Meeting Notes → Action Items",
+  "state": {
+    "inputMode": "text",
+    "pastedText": "",
+    "uploadedFileText": "",
+    "uploadedFileName": "",
+    "uploadedFormat": "json",
+    "submittedEntityId": null,
+    "submitError": null
+  },
+  "dataSources": {
+    "meetingNote": {
+      "type": "supabase",
+      "table": "entities",
+      "select": "*, entity_versions(*)",
+      "filters": [
+        { "field": "id", "op": "eq", "value": "{{state.submittedEntityId}}" },
+        { "field": "entity_versions.is_current", "op": "eq", "value": true }
+      ],
+      "single": true,
+      "enabled": "{{state.submittedEntityId}}",
+      "refetchInterval": 2000,
+      "pollUntilPath": "entity_versions[0].data.processing_status",
+      "pollUntilValues": ["done", "error"]
+    },
+    "actionItems": {
+      "type": "supabase",
+      "table": "relationships_v2",
+      "select": "child_id, entities!relationships_v2_child_id_fkey(*, entity_versions(*))",
+      "filters": [
+        { "field": "parent_id", "op": "eq", "value": "{{state.submittedEntityId}}" },
+        { "field": "relationship_type", "op": "eq", "value": "meeting_has_action_item" }
+      ],
+      "enabled": "{{state.submittedEntityId}}",
+      "refetchInterval": 2000
+    }
+  },
+  "layout": {
+    "type": "Stack",
+    "props": { "spacing": 6 },
+    "children": [
+      {
+        "type": "Heading",
+        "props": { "level": 1, "children": "Meeting Notes → Action Items" }
+      },
+      {
+        "type": "Card",
+        "props": { "title": "Submit a meeting artifact" },
+        "children": [
+          {
+            "type": "Stack",
+            "props": { "spacing": 4 },
+            "children": [
+              {
+                "type": "Stack",
+                "props": { "direction": "horizontal", "spacing": 2 },
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {
+                      "variant": "{{state.inputMode === 'text' ? 'default' : 'outline'}}",
+                      "children": "Paste text",
+                      "onClick": { "action": "setState", "key": "inputMode", "value": "text" }
+                    }
+                  },
+                  {
+                    "type": "Button",
+                    "props": {
+                      "variant": "{{state.inputMode === 'upload' ? 'default' : 'outline'}}",
+                      "children": "Upload file",
+                      "onClick": { "action": "setState", "key": "inputMode", "value": "upload" }
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "Textarea",
+                "if": "{{state.inputMode === 'text'}}",
+                "props": {
+                  "label": "Meeting notes",
+                  "placeholder": "Paste your meeting notes here…",
+                  "rows": 10,
+                  "value": "{{state.pastedText}}",
+                  "onChange": {
+                    "action": "setState",
+                    "key": "pastedText",
+                    "value": "{{event.target.value}}"
+                  }
+                }
+              },
+              {
+                "type": "FileInput",
+                "if": "{{state.inputMode === 'upload'}}",
+                "props": {
+                  "label": "Upload file (.xml or .json)",
+                  "accept": ".xml,.json",
+                  "onFileRead": {
+                    "action": "sequence",
+                    "actions": [
+                      { "action": "setState", "key": "uploadedFileText", "value": "{{event.text}}" },
+                      { "action": "setState", "key": "uploadedFileName", "value": "{{event.filename}}" },
+                      { "action": "setState", "key": "uploadedFormat", "value": "{{event.format}}" }
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "Text",
+                "if": "{{state.inputMode === 'upload'}}",
+                "props": {
+                  "variant": "muted",
+                  "size": "sm",
+                  "children": "{{state.uploadedFileName || 'No file chosen'}}"
+                }
+              },
+              {
+                "type": "Button",
+                "props": {
+                  "children": "Extract Action Items",
+                  "disabled": "{{state.inputMode === 'text' ? !state.pastedText : !state.uploadedFileText}}",
+                  "onClick": {
+                    "action": "custom",
+                    "handler": "submitMeetingArtifact",
+                    "payload": {
+                      "input_format": "{{state.inputMode === 'text' ? 'text' : state.uploadedFormat}}",
+                      "raw_text": "{{state.inputMode === 'text' ? state.pastedText : state.uploadedFileText}}"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Alert",
+        "if": "{{state.submitError}}",
+        "props": {
+          "variant": "destructive",
+          "title": "Submission failed",
+          "description": "{{state.submitError}}"
+        }
+      },
+      {
+        "type": "Grid",
+        "if": "{{state.submittedEntityId}}",
+        "props": { "columns": 2, "gap": 6 },
+        "children": [
+          {
+            "type": "Card",
+            "props": { "title": "Source Artifact" },
+            "children": [
+              {
+                "type": "Text",
+                "props": {
+                  "as": "div",
+                  "size": "sm",
+                  "className": "whitespace-pre-wrap font-mono",
+                  "children": "{{data.meetingNote.entity_versions[0].data.raw_text}}"
+                }
+              }
+            ]
+          },
+          {
+            "type": "Card",
+            "props": { "title": "Action Items" },
+            "children": [
+              {
+                "type": "Stack",
+                "props": { "spacing": 2 },
+                "children": [
+                  {
+                    "type": "Skeleton",
+                    "if": "{{!data.meetingNote}}",
+                    "props": { "height": 96 }
+                  },
+                  {
+                    "type": "Skeleton",
+                    "if": "{{data.meetingNote.entity_versions[0].data.processing_status === 'pending'}}",
+                    "props": { "height": 96 }
+                  },
+                  {
+                    "type": "Skeleton",
+                    "if": "{{data.meetingNote.entity_versions[0].data.processing_status === 'processing'}}",
+                    "props": { "height": 96 }
+                  },
+                  {
+                    "type": "Alert",
+                    "if": "{{data.meetingNote.entity_versions[0].data.processing_status === 'error'}}",
+                    "props": {
+                      "variant": "destructive",
+                      "title": "Extraction failed",
+                      "description": "{{data.meetingNote.entity_versions[0].data.error_message || 'The workflow reported an error.'}}"
+                    }
+                  },
+                  {
+                    "type": "Button",
+                    "if": "{{data.meetingNote.entity_versions[0].data.processing_status === 'error'}}",
+                    "props": {
+                      "variant": "outline",
+                      "children": "Try again",
+                      "onClick": {
+                        "action": "custom",
+                        "handler": "submitMeetingArtifact",
+                        "payload": {
+                          "input_format": "{{state.inputMode === 'text' ? 'text' : state.uploadedFormat}}",
+                          "raw_text": "{{state.inputMode === 'text' ? state.pastedText : state.uploadedFileText}}"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "Stack",
+                    "if": "{{data.meetingNote.entity_versions[0].data.processing_status === 'done'}}",
+                    "props": { "spacing": 2 },
+                    "children": [
+                      {
+                        "type": "Alert",
+                        "if": "{{!data.actionItems[0]}}",
+                        "props": {
+                          "title": "No action items found",
+                          "description": "The model did not extract any action items from this artifact."
+                        }
+                      },
+                      {
+                        "type": "Stack",
+                        "each": "{{data.actionItems}}",
+                        "as": "item",
+                        "key": "{{item.child_id}}",
+                        "props": { "spacing": 1, "className": "p-3 border rounded-lg" },
+                        "children": [
+                          {
+                            "type": "Text",
+                            "props": {
+                              "weight": "medium",
+                              "children": "{{item.entities.entity_versions[0].data.description}}"
+                            }
+                          },
+                          {
+                            "type": "Text",
+                            "props": {
+                              "variant": "muted",
+                              "size": "sm",
+                              "children": "{{item.entities.entity_versions[0].data.owner || 'unassigned'}} · {{item.entities.entity_versions[0].data.due_date || 'no date'}}"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
