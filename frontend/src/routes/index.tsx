@@ -5,6 +5,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { UIEngine } from '@/engine';
 import dashboardPage from '@/pages/dashboard.json';
+import { triggerConfetti } from '@/engine/customHandlers/confetti';
 import type { PageDefinition } from '@/engine/types';
 
 export const Route = createFileRoute('/')({
@@ -12,5 +13,10 @@ export const Route = createFileRoute('/')({
 });
 
 function DashboardPage() {
-  return <UIEngine page={dashboardPage as PageDefinition} />;
+  return (
+    <UIEngine
+      page={dashboardPage as PageDefinition}
+      customHandlers={{ triggerConfetti }}
+    />
+  );
 }
