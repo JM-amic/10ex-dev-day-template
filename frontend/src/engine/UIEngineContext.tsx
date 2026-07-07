@@ -5,7 +5,7 @@
  */
 
 import { createContext, useContext } from 'react';
-import type { UIEngineContextValue, ExpressionContext, ActionDefinition } from './types';
+import type { UIEngineContextValue } from './types';
 
 // Default no-op context value
 const defaultContext: UIEngineContextValue = {
