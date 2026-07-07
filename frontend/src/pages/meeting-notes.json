@@ -4,6 +4,7 @@
   "state": {
     "inputMode": "text",
     "pastedText": "",
+    "pastedTextIsBlank": true,
     "uploadedFileText": "",
     "uploadedFileName": "",
     "uploadedFormat": "json",
@@ -85,9 +86,9 @@
                   "rows": 10,
                   "value": "{{state.pastedText}}",
                   "onChange": {
-                    "action": "setState",
-                    "key": "pastedText",
-                    "value": "{{event.target.value}}"
+                    "action": "custom",
+                    "handler": "updatePastedText",
+                    "payload": "{{event.target.value}}"
                   }
                 }
               },
@@ -121,7 +122,7 @@
                 "if": "{{state.inputMode === 'text'}}",
                 "props": {
                   "children": "Extract Action Items",
-                  "disabled": "{{state.isSubmitting || !state.pastedText}}",
+                  "disabled": "{{state.isSubmitting || state.pastedTextIsBlank}}",
                   "onClick": {
                     "action": "custom",
                     "handler": "submitMeetingArtifact",

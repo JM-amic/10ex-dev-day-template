@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { submitMeetingArtifact } from '../meetingNotes';
+import { submitMeetingArtifact, updatePastedText } from '../meetingNotes';
 import type { ExpressionContext } from '../../types';
 
 // Mutable results the mocked supabase client returns, controlled per-test.
@@ -177,5 +177,36 @@ describe('submitMeetingArtifact', () => {
       xmlContext
     );
     expect(xmlContext.setState).toHaveBeenCalledWith('submitError', null);
+  });
+});
+
+describe('updatePastedText', () => {
+  it('flags whitespace-only text as blank', () => {
+    const context = makeContext();
+
+    updatePastedText('   \n\t  ', context);
+
+    expect(context.setState).toHaveBeenCalledWith('pastedText', '   \n\t  ');
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', true);
+  });
+
+  it('flags empty text as blank', () => {
+    const context = makeContext();
+
+    updatePastedText('', context);
+
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', true);
+  });
+
+  it('does not flag real text as blank, even with surrounding whitespace', () => {
+    const context = makeContext();
+
+    updatePastedText('  Alice will send the budget.  ', context);
+
+    expect(context.setState).toHaveBeenCalledWith(
+      'pastedText',
+      '  Alice will send the budget.  '
+    );
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', false);
   });
 });

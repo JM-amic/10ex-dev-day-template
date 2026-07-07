@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { UIEngine } from '@/engine';
-import { submitMeetingArtifact } from '@/engine/customHandlers/meetingNotes';
+import { submitMeetingArtifact, updatePastedText } from '@/engine/customHandlers/meetingNotes';
 import { initializeRegistry } from '@/registry';
 import meetingNotesPage from '@/pages/meeting-notes.json';
 import type { PageDefinition } from '@/engine/types';
@@ -66,7 +66,7 @@ function renderPage(initialState: Record<string, unknown>) {
       { client: queryClient },
       createElement(UIEngine, {
         page: meetingNotesPage as PageDefinition,
-        customHandlers: { submitMeetingArtifact },
+        customHandlers: { submitMeetingArtifact, updatePastedText },
         initialState,
       })
     )
@@ -105,6 +105,19 @@ describe('Meeting Notes page - integration', () => {
     const textarea = screen.getByRole('textbox');
     await userEvent.type(textarea, 'Discussed the Q3 roadmap.');
 
+    expect(submit).toBeEnabled();
+  });
+
+  it('keeps the submit button disabled for whitespace-only pasted text', async () => {
+    renderPage({ submittedEntityId: null });
+
+    const submit = screen.getByRole('button', { name: 'Extract Action Items' });
+    const textarea = screen.getByRole('textbox');
+
+    await userEvent.type(textarea, '   \n\t  ');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(textarea, 'Discussed the Q3 roadmap.');
     expect(submit).toBeEnabled();
   });
 

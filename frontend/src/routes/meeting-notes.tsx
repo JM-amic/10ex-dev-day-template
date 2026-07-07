@@ -5,7 +5,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { UIEngine } from '@/engine';
 import meetingNotesPage from '@/pages/meeting-notes.json';
-import { submitMeetingArtifact } from '@/engine/customHandlers/meetingNotes';
+import { submitMeetingArtifact, updatePastedText } from '@/engine/customHandlers/meetingNotes';
 import type { PageDefinition } from '@/engine/types';
 
 export const Route = createFileRoute('/meeting-notes')({
@@ -18,7 +18,7 @@ function MeetingNotesPage() {
   return (
     <UIEngine
       page={meetingNotesPage as PageDefinition}
-      customHandlers={{ submitMeetingArtifact }}
+      customHandlers={{ submitMeetingArtifact, updatePastedText }}
       initialState={{ submittedEntityId: entityId }}
     />
   );

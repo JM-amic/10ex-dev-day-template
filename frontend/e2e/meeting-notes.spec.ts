@@ -99,6 +99,13 @@ test('double-submit: rapid double click does not create two workflow runs', asyn
   await expect(page.getByText('Follow up on Q3 budget numbers')).toBeVisible({ timeout: 20_000 });
 });
 
+test('whitespace-only paste: submit stays disabled, not a blank-looking submission', async ({ page }) => {
+  await page.goto('/meeting-notes');
+  await page.getByPlaceholder('Paste your meeting notes here…').fill('   \n\t  ');
+
+  await expect(page.getByRole('button', { name: 'Extract Action Items' })).toBeDisabled();
+});
+
 test('persistence: a page refresh still shows the same artifact and items', async ({ page }) => {
   await submitText(page, 'Alice will send the budget by Friday. Someone should recap the meeting.');
   await expect(page.getByText('Follow up on Q3 budget numbers')).toBeVisible({ timeout: 20_000 });
