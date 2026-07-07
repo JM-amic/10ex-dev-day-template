@@ -12,9 +12,8 @@ import dashboardPage from '@/pages/dashboard.json';
 import type { PageDefinition } from '@/engine/types';
 import { Route as IndexRoute } from '../index';
 
-// No real router in this test; UIEngine calls useNavigate() unconditionally, and
-// dashboard.json renders a <Link to="/entities/portfolio"> that would otherwise
-// need a full RouterProvider context just to sit there unused.
+// No real router in this test; UIEngine calls useNavigate() unconditionally
+// even though dashboard.json has no links that need it.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   useNavigate: () => vi.fn(),
