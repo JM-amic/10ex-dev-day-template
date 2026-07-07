@@ -6,7 +6,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from .config import settings
-from .activities import supabase_core, notifications
+from .activities import supabase_core, notifications, llm
 from .workflows.example.approval_workflow import ApprovalWorkflow
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +30,7 @@ async def main() -> None:
             supabase_core.create_relationship,
             notifications.send_email,
             notifications.send_notification,
+            llm.call_model,
         ],
         activity_executor=activity_executor,
     )
