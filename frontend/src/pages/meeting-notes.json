@@ -4,11 +4,13 @@
   "state": {
     "inputMode": "text",
     "pastedText": "",
+    "pastedTextIsBlank": true,
     "uploadedFileText": "",
     "uploadedFileName": "",
     "uploadedFormat": "json",
     "submittedEntityId": null,
-    "submitError": null
+    "submitError": null,
+    "isSubmitting": false
   },
   "dataSources": {
     "meetingNote": {
@@ -84,9 +86,9 @@
                   "rows": 10,
                   "value": "{{state.pastedText}}",
                   "onChange": {
-                    "action": "setState",
-                    "key": "pastedText",
-                    "value": "{{event.target.value}}"
+                    "action": "custom",
+                    "handler": "updatePastedText",
+                    "payload": "{{event.target.value}}"
                   }
                 }
               },
@@ -117,15 +119,29 @@
               },
               {
                 "type": "Button",
+                "if": "{{state.inputMode === 'text'}}",
                 "props": {
                   "children": "Extract Action Items",
-                  "disabled": "{{state.inputMode === 'text' ? !state.pastedText : !state.uploadedFileText}}",
+                  "disabled": "{{state.isSubmitting || state.pastedTextIsBlank}}",
+                  "onClick": {
+                    "action": "custom",
+                    "handler": "submitMeetingArtifact",
+                    "payload": { "input_format": "text", "raw_text": "{{state.pastedText}}" }
+                  }
+                }
+              },
+              {
+                "type": "Button",
+                "if": "{{state.inputMode === 'upload'}}",
+                "props": {
+                  "children": "Extract Action Items",
+                  "disabled": "{{state.isSubmitting || !state.uploadedFileText}}",
                   "onClick": {
                     "action": "custom",
                     "handler": "submitMeetingArtifact",
                     "payload": {
-                      "input_format": "{{state.inputMode === 'text' ? 'text' : state.uploadedFormat}}",
-                      "raw_text": "{{state.inputMode === 'text' ? state.pastedText : state.uploadedFileText}}"
+                      "input_format": "{{state.uploadedFormat}}",
+                      "raw_text": "{{state.uploadedFileText}}"
                     }
                   }
                 }
@@ -201,6 +217,7 @@
                     "props": {
                       "variant": "outline",
                       "children": "Try again",
+                      "disabled": "{{state.isSubmitting}}",
                       "onClick": {
                         "action": "custom",
                         "handler": "submitMeetingArtifact",

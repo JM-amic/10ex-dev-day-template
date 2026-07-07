@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { submitMeetingArtifact } from '../meetingNotes';
+import { submitMeetingArtifact, updatePastedText } from '../meetingNotes';
 import type { ExpressionContext } from '../../types';
 
 // Mutable results the mocked supabase client returns, controlled per-test.
@@ -116,5 +116,97 @@ describe('submitMeetingArtifact', () => {
       'submitError',
       expect.stringContaining('500')
     );
+  });
+
+  it('toggles isSubmitting on around a successful submit', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(payload, context);
+
+    const calls = (context.setState as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const onIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === true);
+    const offIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === false);
+    expect(onIdx).toBeGreaterThanOrEqual(0);
+    expect(offIdx).toBeGreaterThan(onIdx);
+  });
+
+  it('rejects malformed JSON before inserting anything, and turns isSubmitting back off', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(
+      { input_format: 'json', raw_text: '{this is not valid json' },
+      context
+    );
+
+    expect(context.setState).toHaveBeenCalledWith('submittedEntityId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('not valid JSON')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(context.setState).not.toHaveBeenCalledWith('isSubmitting', true);
+  });
+
+  it('rejects malformed XML before inserting anything', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(
+      { input_format: 'xml', raw_text: '<meeting><unclosed>' },
+      context
+    );
+
+    expect(context.setState).toHaveBeenCalledWith('submittedEntityId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('not valid XML')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts well-formed JSON and XML uploads', async () => {
+    const jsonContext = makeContext();
+    await submitMeetingArtifact(
+      { input_format: 'json', raw_text: '{"notes": "Alice will send the budget."}' },
+      jsonContext
+    );
+    expect(jsonContext.setState).toHaveBeenCalledWith('submitError', null);
+
+    const xmlContext = makeContext();
+    await submitMeetingArtifact(
+      { input_format: 'xml', raw_text: '<meeting><note>Alice will send the budget.</note></meeting>' },
+      xmlContext
+    );
+    expect(xmlContext.setState).toHaveBeenCalledWith('submitError', null);
+  });
+});
+
+describe('updatePastedText', () => {
+  it('flags whitespace-only text as blank', () => {
+    const context = makeContext();
+
+    updatePastedText('   \n\t  ', context);
+
+    expect(context.setState).toHaveBeenCalledWith('pastedText', '   \n\t  ');
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', true);
+  });
+
+  it('flags empty text as blank', () => {
+    const context = makeContext();
+
+    updatePastedText('', context);
+
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', true);
+  });
+
+  it('does not flag real text as blank, even with surrounding whitespace', () => {
+    const context = makeContext();
+
+    updatePastedText('  Alice will send the budget.  ', context);
+
+    expect(context.setState).toHaveBeenCalledWith(
+      'pastedText',
+      '  Alice will send the budget.  '
+    );
+    expect(context.setState).toHaveBeenCalledWith('pastedTextIsBlank', false);
   });
 });

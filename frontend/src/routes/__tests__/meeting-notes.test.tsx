@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { UIEngine } from '@/engine';
-import { submitMeetingArtifact } from '@/engine/customHandlers/meetingNotes';
+import { submitMeetingArtifact, updatePastedText } from '@/engine/customHandlers/meetingNotes';
 import { initializeRegistry } from '@/registry';
 import meetingNotesPage from '@/pages/meeting-notes.json';
 import type { PageDefinition } from '@/engine/types';
@@ -66,7 +66,7 @@ function renderPage(initialState: Record<string, unknown>) {
       { client: queryClient },
       createElement(UIEngine, {
         page: meetingNotesPage as PageDefinition,
-        customHandlers: { submitMeetingArtifact },
+        customHandlers: { submitMeetingArtifact, updatePastedText },
         initialState,
       })
     )
@@ -92,6 +92,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('Meeting Notes page - integration', () => {
@@ -105,6 +106,50 @@ describe('Meeting Notes page - integration', () => {
     await userEvent.type(textarea, 'Discussed the Q3 roadmap.');
 
     expect(submit).toBeEnabled();
+  });
+
+  it('keeps the submit button disabled for whitespace-only pasted text', async () => {
+    renderPage({ submittedEntityId: null });
+
+    const submit = screen.getByRole('button', { name: 'Extract Action Items' });
+    const textarea = screen.getByRole('textbox');
+
+    await userEvent.type(textarea, '   \n\t  ');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(textarea, 'Discussed the Q3 roadmap.');
+    expect(submit).toBeEnabled();
+  });
+
+  it('disables the submit button while a submission is in flight, to prevent double-submit', async () => {
+    let resolveEntityInsert: (v: unknown) => void = () => {};
+    const supabaseMod = await import('@/data/supabase');
+    const originalFrom = supabaseMod.supabase.from.bind(supabaseMod.supabase);
+    vi.spyOn(supabaseMod.supabase, 'from').mockImplementation(((table: string) => {
+      if (table === 'entities') {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () =>
+                new Promise((resolve) => {
+                  resolveEntityInsert = resolve;
+                }),
+            }),
+          }),
+        };
+      }
+      return originalFrom(table);
+    }) as typeof supabaseMod.supabase.from);
+
+    renderPage({ submittedEntityId: null });
+
+    const submit = screen.getByRole('button', { name: 'Extract Action Items' });
+    await userEvent.type(screen.getByRole('textbox'), 'Some meeting notes');
+    await userEvent.click(submit);
+
+    await waitFor(() => expect(submit).toBeDisabled());
+
+    resolveEntityInsert({ data: { id: 'e1' }, error: null });
   });
 
   it('submitting shows a loading state while the note is still processing', async () => {
