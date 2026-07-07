@@ -13,6 +13,10 @@ name: Pipeline — Daily
 # Each stage is an independent GitHub Actions step with continue-on-error: true and
 # a per-stage timeout so a failing/hung stage never blocks the next one.
 # Stage outcome is appended to $GITHUB_STEP_SUMMARY.
+#
+# NOTE: this file was never picked up by GitHub's workflow indexer despite being
+# present since the initial commit (a repo-import quirk); touching the file was
+# needed to force re-indexing.
 
 on:
   schedule:

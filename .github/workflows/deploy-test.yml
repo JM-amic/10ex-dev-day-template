@@ -13,6 +13,10 @@ name: Deploy Test
 #
 # NOTE: per spec, the helm/kubectl step should eventually move to the
 # `factory-deploy-nonprod` self-hosted runner once that runner is provisioned.
+#
+# NOTE: this file was never picked up by GitHub's workflow indexer despite being
+# present since the initial commit (a repo-import quirk); touching the file was
+# needed to force re-indexing.
 
 on:
   workflow_dispatch:
