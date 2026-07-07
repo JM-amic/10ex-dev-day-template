@@ -11,8 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as MeetingNotesRouteImport } from './routes/meeting-notes'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as EntitiesEntityTypeIndexRouteImport } from './routes/entities/$entityType/index'
-import { Route as EntitiesEntityTypeIdRouteImport } from './routes/entities/$entityType/$id'
 
 const MeetingNotesRoute = MeetingNotesRouteImport.update({
   id: '/meeting-notes',
@@ -24,62 +22,31 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EntitiesEntityTypeIndexRoute = EntitiesEntityTypeIndexRouteImport.update({
-  id: '/entities/$entityType/',
-  path: '/entities/$entityType/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EntitiesEntityTypeIdRoute = EntitiesEntityTypeIdRouteImport.update({
-  id: '/entities/$entityType/$id',
-  path: '/entities/$entityType/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/meeting-notes': typeof MeetingNotesRoute
-  '/entities/$entityType/$id': typeof EntitiesEntityTypeIdRoute
-  '/entities/$entityType': typeof EntitiesEntityTypeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/meeting-notes': typeof MeetingNotesRoute
-  '/entities/$entityType/$id': typeof EntitiesEntityTypeIdRoute
-  '/entities/$entityType': typeof EntitiesEntityTypeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/meeting-notes': typeof MeetingNotesRoute
-  '/entities/$entityType/$id': typeof EntitiesEntityTypeIdRoute
-  '/entities/$entityType/': typeof EntitiesEntityTypeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/meeting-notes'
-    | '/entities/$entityType/$id'
-    | '/entities/$entityType'
+  fullPaths: '/' | '/meeting-notes'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/meeting-notes'
-    | '/entities/$entityType/$id'
-    | '/entities/$entityType'
-  id:
-    | '__root__'
-    | '/'
-    | '/meeting-notes'
-    | '/entities/$entityType/$id'
-    | '/entities/$entityType/'
+  to: '/' | '/meeting-notes'
+  id: '__root__' | '/' | '/meeting-notes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   MeetingNotesRoute: typeof MeetingNotesRoute
-  EntitiesEntityTypeIdRoute: typeof EntitiesEntityTypeIdRoute
-  EntitiesEntityTypeIndexRoute: typeof EntitiesEntityTypeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -98,28 +65,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/entities/$entityType/': {
-      id: '/entities/$entityType/'
-      path: '/entities/$entityType'
-      fullPath: '/entities/$entityType'
-      preLoaderRoute: typeof EntitiesEntityTypeIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/entities/$entityType/$id': {
-      id: '/entities/$entityType/$id'
-      path: '/entities/$entityType/$id'
-      fullPath: '/entities/$entityType/$id'
-      preLoaderRoute: typeof EntitiesEntityTypeIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MeetingNotesRoute: MeetingNotesRoute,
-  EntitiesEntityTypeIdRoute: EntitiesEntityTypeIdRoute,
-  EntitiesEntityTypeIndexRoute: EntitiesEntityTypeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
