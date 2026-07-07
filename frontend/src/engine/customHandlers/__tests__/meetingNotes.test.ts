@@ -117,4 +117,65 @@ describe('submitMeetingArtifact', () => {
       expect.stringContaining('500')
     );
   });
+
+  it('toggles isSubmitting on around a successful submit', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(payload, context);
+
+    const calls = (context.setState as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const onIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === true);
+    const offIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === false);
+    expect(onIdx).toBeGreaterThanOrEqual(0);
+    expect(offIdx).toBeGreaterThan(onIdx);
+  });
+
+  it('rejects malformed JSON before inserting anything, and turns isSubmitting back off', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(
+      { input_format: 'json', raw_text: '{this is not valid json' },
+      context
+    );
+
+    expect(context.setState).toHaveBeenCalledWith('submittedEntityId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('not valid JSON')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(context.setState).not.toHaveBeenCalledWith('isSubmitting', true);
+  });
+
+  it('rejects malformed XML before inserting anything', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(
+      { input_format: 'xml', raw_text: '<meeting><unclosed>' },
+      context
+    );
+
+    expect(context.setState).toHaveBeenCalledWith('submittedEntityId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('not valid XML')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts well-formed JSON and XML uploads', async () => {
+    const jsonContext = makeContext();
+    await submitMeetingArtifact(
+      { input_format: 'json', raw_text: '{"notes": "Alice will send the budget."}' },
+      jsonContext
+    );
+    expect(jsonContext.setState).toHaveBeenCalledWith('submitError', null);
+
+    const xmlContext = makeContext();
+    await submitMeetingArtifact(
+      { input_format: 'xml', raw_text: '<meeting><note>Alice will send the budget.</note></meeting>' },
+      xmlContext
+    );
+    expect(xmlContext.setState).toHaveBeenCalledWith('submitError', null);
+  });
 });

@@ -36,7 +36,9 @@ async def _run(env: WorkflowEnvironment, activities, entity_id: str = "meeting-1
 
 
 async def test_happy_path():
-    status_calls: list[str] = []
+    status_calls: list[tuple[str, int]] = []
+    create_entity_calls: list[tuple] = []
+    create_relationship_calls: list[tuple] = []
 
     @activity.defn(name="get_entity")
     async def get_entity(entity_id: str) -> dict:
@@ -53,7 +55,7 @@ async def test_happy_path():
 
     @activity.defn(name="update_entity_scd2")
     async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
-        status_calls.append(attributes["processing_status"])
+        status_calls.append((attributes["processing_status"], version_number))
         return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
 
     @activity.defn(name="call_model")
@@ -66,20 +68,47 @@ async def test_happy_path():
 
     @activity.defn(name="create_entity")
     async def create_entity(entity_type, attributes, created_by, source_record_id) -> EntityResult:
+        create_entity_calls.append((entity_type, attributes, source_record_id))
         return EntityResult(entity_id=f"action-{uuid.uuid4()}", version_id="v1")
 
     @activity.defn(name="create_relationship")
     async def create_relationship(from_id, to_id, rel_type, attributes) -> dict:
+        create_relationship_calls.append((from_id, to_id, rel_type))
         return {"relationship_id": str(uuid.uuid4()), "success": True}
 
     async with await WorkflowEnvironment.start_time_skipping() as env:
         result = await _run(
             env,
             [get_entity, update_entity_scd2, call_model, create_entity, create_relationship],
+            entity_id="meeting-1",
         )
 
     assert result == {"status": "done", "item_count": 2}
-    assert status_calls == ["processing", "done"]
+    # Two SCD2 versions layered on the version_number=1 read from get_entity.
+    assert status_calls == [("processing", 2), ("done", 3)]
+
+    assert [c[0] for c in create_entity_calls] == ["action_item", "action_item"]
+    assert create_entity_calls[0][1] == {
+        "description": "ship the report",
+        "owner": "Alice",
+        "due_date": None,
+    }
+    assert create_entity_calls[1][1] == {
+        "description": "book the room",
+        "owner": "Bob",
+        "due_date": None,
+    }
+    # Unique, deterministic source_record_id per item -- this is what makes the
+    # create_entity ON CONFLICT idempotency in supabase_core.py actually work on retry.
+    assert create_entity_calls[0][2] == "meeting-1:action-item:0"
+    assert create_entity_calls[1][2] == "meeting-1:action-item:1"
+
+    action_entity_ids = set()
+    for from_id, to_id, rel_type in create_relationship_calls:
+        assert from_id == "meeting-1"
+        assert rel_type == "meeting_has_action_item"
+        action_entity_ids.add(to_id)
+    assert len(action_entity_ids) == 2  # each relationship points at a distinct action item
 
 
 async def test_zero_items():

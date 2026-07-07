@@ -10,6 +10,24 @@ interface MeetingArtifactPayload {
   raw_text: string;
 }
 
+function unparseableReason(input_format: string, raw_text: string): string | null {
+  if (input_format === 'json') {
+    try {
+      JSON.parse(raw_text);
+      return null;
+    } catch {
+      return 'Uploaded file is not valid JSON.';
+    }
+  }
+  if (input_format === 'xml') {
+    const doc = new DOMParser().parseFromString(raw_text, 'application/xml');
+    return doc.getElementsByTagName('parsererror').length > 0
+      ? 'Uploaded file is not valid XML.'
+      : null;
+  }
+  return null;
+}
+
 /**
  * Inserts a meeting_notes entity + its first version, then triggers the
  * extract-action-items workflow. Reports the created entity id (or an error
@@ -22,6 +40,14 @@ export async function submitMeetingArtifact(
   const { input_format, raw_text } = (payload || {}) as MeetingArtifactPayload;
   const setState = context.setState;
 
+  const reason = unparseableReason(input_format, raw_text);
+  if (reason) {
+    setState?.('submittedEntityId', null);
+    setState?.('submitError', reason);
+    return;
+  }
+
+  setState?.('isSubmitting', true);
   try {
     const { data: entity, error: entityError } = await supabase
       .from('entities')
@@ -64,5 +90,7 @@ export async function submitMeetingArtifact(
     const message = err instanceof Error ? err.message : String(err);
     setState?.('submittedEntityId', null);
     setState?.('submitError', `Failed to submit meeting artifact: ${message}`);
+  } finally {
+    setState?.('isSubmitting', false);
   }
 }
