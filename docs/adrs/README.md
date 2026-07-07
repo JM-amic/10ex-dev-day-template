@@ -17,11 +17,9 @@ Architectural decisions (data model, orchestration engine, deployment topology, 
 
 ## Index
 
-No ADRs recorded yet. Add a row per decision as you accept it.
-
 | ADR | Title | Status |
 |---|---|---|
-| [0001](./0001-example-slug.md) | _First decision title_ | Proposed |
+| [0001](./0001-meeting-notes-workflow-shape-and-model-hosting.md) | Meeting Notes action-item extraction — workflow shape and model hosting | Proposed |
 
 ## Maintenance note
 
