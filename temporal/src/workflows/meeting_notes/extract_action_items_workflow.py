@@ -110,5 +110,8 @@ class ExtractActionItemsWorkflow:
             return {"status": "done", "item_count": len(items)}
 
         except Exception as exc:  # noqa: BLE001 — deliberately broad: terminal safety net
-            await _mark("error", error_message=str(exc))
-            return {"status": "error", "error": str(exc)}
+            # Activity failures surface as ActivityError, whose own str() is a generic
+            # "Activity task failed" -- the real message is chained onto __cause__.
+            message = str(exc.__cause__) if exc.__cause__ else str(exc)
+            await _mark("error", error_message=message)
+            return {"status": "error", "error": message}

@@ -12,7 +12,9 @@ endif
 
 COMPOSE_CMD=docker compose $(foreach file,$(COMPOSE_FILES),-f $(file))
 
-.PHONY: up down reset logs logs-temporal logs-frontend supabase-status
+COMPOSE_E2E_CMD=docker compose -f docker-compose.e2e.yml
+
+.PHONY: up down reset logs logs-temporal logs-frontend supabase-status e2e-up e2e-down
 
 # `up` starts the full local Supabase stack (Postgres + API/Kong + Auth +
 # Storage + Studio) via the Supabase CLI, applying migrations and seed, THEN
@@ -46,3 +48,21 @@ logs-frontend:
 # Supabase is CLI-managed, not a compose service -- use this for its status/keys.
 supabase-status:
 	supabase status
+
+# E2E stack: a standalone set of Temporal/worker/trigger/frontend containers
+# on distinct ports (3001/7235/8001) so it can run alongside `make up`'s dev
+# stack without colliding with it. Shares the same Supabase CLI instance --
+# spinning up a second one isn't practical, and it's harmless since E2E just
+# writes its own rows into the same local dev DB. The worker's Azure OpenAI
+# call is pointed at a local deterministic stub (e2e/stub-llm) instead of the
+# real endpoint.
+e2e-up:
+	supabase start
+	@eval "$$(./scripts/supabase-env.sh)"; $(COMPOSE_E2E_CMD) up -d --build
+	@echo ""
+	@echo "E2E backend up (Trigger http://localhost:8001). Run 'npm run test:e2e' in frontend/ to also launch the frontend and run Playwright."
+
+# Leaves the shared Supabase instance running (it may still be in use by
+# `make up`'s dev stack) -- run `make down` / `supabase stop` separately.
+e2e-down:
+	$(COMPOSE_E2E_CMD) down
