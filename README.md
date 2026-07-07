@@ -4,7 +4,7 @@
 > run regenerates this branch. The machine-readable source of truth is [`runs.jsonl`](./runs.jsonl).
 > Deployed-environment E2E trends live separately on the [`e2e-history`](../../tree/e2e-history) branch.
 
-**Last updated:** 2026-07-07 21:48Z · 9 records · suites: `helm`, `seed`, `temporal`
+**Last updated:** 2026-07-07 22:01Z · 13 records · suites: `helm`, `seed`, `temporal`, `unit`
 
 ![trend](./trend.svg)
 
@@ -12,18 +12,23 @@
 
 | Suite | Latest | When (UTC) | Pass 24h | Pass 7d | Green streak | Runs |
 |---|---|---|--:|--:|--:|--:|
-| `helm` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) | — | — | — | 0 | 3 |
-| `seed` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) | — | — | — | 0 | 3 |
-| `temporal` | ✅ `passed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) | 2026-07-07 21:48Z | 100% (3) | 100% (3) | 3 | 3 |
+| `helm` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) | — | — | — | 0 | 4 |
+| `seed` | ❌ `failed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) | — | — | — | 0 | 4 |
+| `temporal` | ✅ `passed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) | 2026-07-07 22:01Z | 100% (4) | 100% (4) | 4 | 4 |
+| `unit` | ✅ `passed` [↗](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) | 2026-07-07 22:01Z | 100% (1) | 100% (1) | 1 | 1 |
 
 
 ## Recent runs
 
 | When (UTC) | Suite | Result | Pass | Fail | Skip | Duration | Commit | Run |
 |---|---|---|--:|--:|--:|--:|---|---|
+| 2026-07-07 22:01Z | `unit` | ✅ passed | 45 | 0 | 0 | 1.7s | `affc25b` | [#4](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) |
+| 2026-07-07 22:01Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.6s | `affc25b` | [#4](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) |
 | 2026-07-07 21:48Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.3s | `b9df583` | [#3](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) |
 | 2026-07-07 21:31Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.7s | `3be463e` | [#2](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) |
 | 2026-07-07 21:24Z | `temporal` | ✅ passed | 19 | 0 | 0 | 2.2s | `d519edc` | [#1](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28899710957) |
+| — | `seed` | ❌ failed | 0 | 1 | 0 | — | `affc25b` | [#4](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) |
+| — | `helm` | ❌ failed | 151 | 2 | 0 | — | `affc25b` | [#4](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901679422) |
 | — | `seed` | ❌ failed | 0 | 1 | 0 | — | `b9df583` | [#3](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) |
 | — | `helm` | ❌ failed | 151 | 2 | 0 | — | `b9df583` | [#3](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28901032838) |
 | — | `seed` | ❌ failed | 0 | 1 | 0 | — | `3be463e` | [#2](https://github.com/JM-amic/10ex-dev-day-template/actions/runs/28900078371) |
