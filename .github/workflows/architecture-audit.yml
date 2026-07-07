@@ -12,7 +12,7 @@ on:
     - cron: '0 6 * * *'  # daily 06:00 UTC
   workflow_dispatch: {}
   pull_request:
-    branches: [main]
+    branches: [master]
     paths:
       - 'temporal/src/**'
       - 'supabase/migrations/**'

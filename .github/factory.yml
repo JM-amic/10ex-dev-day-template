@@ -1,8 +1,8 @@
 repository:
-  owner: <ORG>
-  name: <REPO_NAME>
-  default_branch: main
-  project_owner: <ORG>
+  owner: JM-amic
+  name: 10ex-dev-day-template
+  default_branch: master
+  project_owner: JM-amic
   project_number: 0   # set your GitHub Project board number
 
 factory:

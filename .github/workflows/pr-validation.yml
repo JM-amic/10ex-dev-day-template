@@ -2,9 +2,9 @@ name: PR Validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches: [main]
+    branches: [master]
 
 concurrency:
   group: pr-validation-${{ github.ref }}
@@ -233,7 +233,7 @@ jobs:
     # main (i.e. after a merge), not on every PR commit. PR runs still gate and still
     # upload per-suite artifacts — they just don't pollute the long-term trend, and we
     # avoid needing write access on (potentially fork) pull_request events.
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write

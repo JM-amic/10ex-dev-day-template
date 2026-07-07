@@ -11,7 +11,7 @@ on:
       - 'deploy/k8s/**'
       - '.github/workflows/k8s-render-validate.yml'
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'charts/**'
       - 'deploy/k8s/**'

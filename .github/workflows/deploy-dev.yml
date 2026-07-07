@@ -15,7 +15,7 @@ on:
   workflow_run:
     workflows: ["Build Images"]
     types: [completed]
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
     inputs:
       build_run_id:

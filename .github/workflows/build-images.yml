@@ -3,7 +3,7 @@ name: Build Images
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
         id: push-gate
         shell: bash
         env:
-          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
           REGISTRY: ${{ vars.ACR_LOGIN_SERVER }}
           REGISTRY_USERNAME: ${{ secrets.ACR_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.ACR_PASSWORD }}
