@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine
+FROM mcr.microsoft.com/mirror/docker/library/node:20-bookworm-slim
 WORKDIR /app
 
 COPY package.json package-lock.json* .npmrc* ./
