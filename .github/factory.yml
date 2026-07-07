@@ -58,7 +58,7 @@ commands:
     optional: false
   frontend_test:
     cmd: "npm --prefix frontend test -- --run"
-    optional: true   # no test script yet; skip gracefully
+    optional: false   # Vitest suite exists (src/**/__tests__/*.test.ts[x])
   worker_test:
     cmd: "python -m pytest temporal/tests"
     optional: true   # no tests yet; skip gracefully

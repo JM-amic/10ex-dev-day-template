@@ -20,6 +20,13 @@
               "variant": "muted",
               "children": "Welcome to the JSON-driven UI Engine"
             }
+          },
+          {
+            "type": "Button",
+            "props": {
+              "children": "🎉 Celebrate",
+              "onClick": { "action": "custom", "handler": "triggerConfetti" }
+            }
           }
         ]
       },
