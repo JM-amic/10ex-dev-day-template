@@ -76,6 +76,44 @@ describe('triggerConfetti', () => {
     expect(confettiMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not call context.setState (purely decorative, no state side effects)', () => {
+    const context = makeContext();
+
+    triggerConfetti(undefined, context);
+
+    expect(context.setState).not.toHaveBeenCalled();
+  });
+
+  it('does not log to the console', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    triggerConfetti(undefined, makeContext());
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not touch fetch or any network API', () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    triggerConfetti(undefined, makeContext());
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('handles repeated rapid invocations without throwing or stacking state (one confetti() call per invocation)', () => {
+    expect(() => {
+      for (let i = 0; i < 10; i += 1) {
+        triggerConfetti(undefined, makeContext());
+      }
+    }).not.toThrow();
+
+    expect(confettiMock).toHaveBeenCalledTimes(10);
+  });
+
   it('is assignable to the CustomActionHandler type ActionDispatcher expects', () => {
     // Compile-time contract check: fails the build if the signature drifts.
     const handler: CustomActionHandler = triggerConfetti;
