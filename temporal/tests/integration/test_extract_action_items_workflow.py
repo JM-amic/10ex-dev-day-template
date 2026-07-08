@@ -195,6 +195,49 @@ async def test_model_failure():
     assert error_calls[0]["error_message"] == "boom"
 
 
+async def test_get_entity_failure_still_writes_error_status():
+    """Regression test: a non-retryable get_entity failure (e.g. the entity's data
+    payload exceeds Temporal's activity result size limit) must not leave the
+    workflow failing silently -- an error status has to be written even though
+    `data` was never fetched."""
+    error_calls: list[dict] = []
+
+    @activity.defn(name="get_entity")
+    async def get_entity(entity_id: str) -> dict:
+        raise ApplicationError("Complete result exceeds size limit", non_retryable=True)
+
+    @activity.defn(name="update_entity_scd2")
+    async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
+        if attributes["processing_status"] == "error":
+            error_calls.append({"version_number": version_number, **attributes})
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
+
+    @activity.defn(name="call_model")
+    async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
+        raise AssertionError("call_model should not be called when get_entity fails")
+
+    @activity.defn(name="create_entity")
+    async def create_entity(entity_type, attributes, created_by, source_record_id) -> EntityResult:
+        raise AssertionError("create_entity should not be called when get_entity fails")
+
+    @activity.defn(name="create_relationship")
+    async def create_relationship(from_id, to_id, rel_type, attributes) -> dict:
+        raise AssertionError("create_relationship should not be called when get_entity fails")
+
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        result = await _run(
+            env,
+            [get_entity, update_entity_scd2, call_model, create_entity, create_relationship],
+        )
+
+    assert result == {"status": "error", "error": "Complete result exceeds size limit"}
+    assert len(error_calls) == 1
+    assert error_calls[0]["processing_status"] == "error"
+    assert error_calls[0]["error_message"] == "Complete result exceeds size limit"
+    # version_number=1 is the entity's initial row; the error write must use a later version.
+    assert error_calls[0]["version_number"] > 1
+
+
 async def test_activity_exception_path():
     error_calls: list[dict] = []
 

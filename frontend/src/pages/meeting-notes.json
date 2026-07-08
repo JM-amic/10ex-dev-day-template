@@ -222,8 +222,8 @@
                         "action": "custom",
                         "handler": "submitMeetingArtifact",
                         "payload": {
-                          "input_format": "{{state.inputMode === 'text' ? 'text' : state.uploadedFormat}}",
-                          "raw_text": "{{state.inputMode === 'text' ? state.pastedText : state.uploadedFileText}}"
+                          "input_format": "{{data.meetingNote.entity_versions[0].data.input_format}}",
+                          "raw_text": "{{data.meetingNote.entity_versions[0].data.raw_text}}"
                         }
                       }
                     }

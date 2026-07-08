@@ -163,6 +163,52 @@ describe('submitMeetingArtifact', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('ignores a second submission fired before the first one has left the synchronous guard', async () => {
+    const context = makeContext();
+
+    // Neither call is awaited before the other starts, mirroring a double-click: both
+    // handler invocations run their synchronous prelude before either yields on the
+    // first `await`, so the guard must be set synchronously, not via React state.
+    const first = submitMeetingArtifact(payload, context);
+    const second = submitMeetingArtifact(payload, context);
+    await Promise.all([first, second]);
+
+    // The trigger endpoint is only reached once both supabase inserts have completed,
+    // so a single fetch call proves the second submission never entered the handler body.
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const setStateMock = context.setState as unknown as ReturnType<typeof vi.fn>;
+    const submittingOnCalls = setStateMock.mock.calls.filter(
+      ([key, val]) => key === 'isSubmitting' && val === true
+    );
+    expect(submittingOnCalls).toHaveLength(1);
+  });
+
+  it('allows a fresh submission once the prior one has finished', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(payload, context);
+    await submitMeetingArtifact(payload, context);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects raw_text over the size limit before inserting anything', async () => {
+    const context = makeContext();
+
+    await submitMeetingArtifact(
+      { input_format: 'text', raw_text: 'x'.repeat(500_001) },
+      context
+    );
+
+    expect(context.setState).toHaveBeenCalledWith('submittedEntityId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('too long')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('accepts well-formed JSON and XML uploads', async () => {
     const jsonContext = makeContext();
     await submitMeetingArtifact(

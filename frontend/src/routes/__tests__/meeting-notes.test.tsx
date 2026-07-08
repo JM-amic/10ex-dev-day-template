@@ -20,6 +20,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 const db = vi.hoisted(() => ({
   entities: { data: null as unknown, error: null as unknown },
   relationships_v2: { data: [] as unknown, error: null as unknown },
+  entityVersionInserts: [] as unknown[],
 }));
 
 function resultFor(table: string): { data: unknown; error: unknown } {
@@ -29,11 +30,16 @@ function resultFor(table: string): { data: unknown; error: unknown } {
   return { data: null, error: null };
 }
 
-function makeBuilder(result: { data: unknown; error: unknown }): unknown {
+function makeBuilder(table: string, result: { data: unknown; error: unknown }): unknown {
   const builder: unknown = new Proxy(
     {},
     {
       get(_target, prop) {
+        if (prop === 'insert')
+          return (payload: unknown) => {
+            if (table === 'entity_versions') db.entityVersionInserts.push(payload);
+            return builder;
+          };
         if (prop === 'single') return () => Promise.resolve(result);
         if (prop === 'then')
           return (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
@@ -51,7 +57,7 @@ function makeBuilder(result: { data: unknown; error: unknown }): unknown {
 
 vi.mock('@/data/supabase', () => ({
   supabase: {
-    from: (table: string) => makeBuilder(resultFor(table)),
+    from: (table: string) => makeBuilder(table, resultFor(table)),
     rpc: () => Promise.resolve({ data: null, error: null }),
   },
 }));
@@ -87,6 +93,7 @@ beforeAll(() => {
 beforeEach(() => {
   db.entities = { data: null, error: null };
   db.relationships_v2 = { data: [], error: null };
+  db.entityVersionInserts = [];
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
 });
 
@@ -256,5 +263,36 @@ describe('Meeting Notes page - integration', () => {
     });
     expect(screen.getByText('Extraction failed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('"Try again" resubmits the persisted raw text, not empty client state left over from a page refresh', async () => {
+    db.entities = {
+      data: {
+        id: 'e1',
+        entity_versions: [
+          {
+            data: {
+              processing_status: 'error',
+              error_message: 'The model timed out.',
+              input_format: 'text',
+              raw_text: 'the original meeting notes',
+            },
+          },
+        ],
+      },
+      error: null,
+    };
+    db.relationships_v2 = { data: [], error: null };
+
+    // Simulates a reload: submittedEntityId is restored from the URL, but pastedText
+    // is back to its initial empty client-only state.
+    renderPage({ submittedEntityId: 'e1', pastedText: '' });
+
+    const tryAgain = await screen.findByRole('button', { name: 'Try again' });
+    await userEvent.click(tryAgain);
+
+    await waitFor(() => expect(db.entityVersionInserts.length).toBeGreaterThan(0));
+    const insertedVersion = db.entityVersionInserts[0] as { data: { raw_text: string } };
+    expect(insertedVersion.data.raw_text).toBe('the original meeting notes');
   });
 });

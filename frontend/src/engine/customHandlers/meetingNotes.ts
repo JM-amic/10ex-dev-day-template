@@ -10,6 +10,13 @@ interface MeetingArtifactPayload {
   raw_text: string;
 }
 
+// Module-level (not React state) so a double-click can't slip a second submission in
+// before a re-render disables the button -- the guard has to be synchronous with the
+// very first line of the handler, not dependent on a state update being flushed first.
+let submissionInFlight = false;
+
+const MAX_RAW_TEXT_LENGTH = 500_000; // ~500KB; well under Temporal's activity payload size limit
+
 function unparseableReason(input_format: string, raw_text: string): string | null {
   if (input_format === 'json') {
     try {
@@ -53,6 +60,10 @@ export async function submitMeetingArtifact(
   const { input_format, raw_text } = (payload || {}) as MeetingArtifactPayload;
   const setState = context.setState;
 
+  if (submissionInFlight) {
+    return;
+  }
+
   const reason = unparseableReason(input_format, raw_text);
   if (reason) {
     setState?.('submittedEntityId', null);
@@ -60,6 +71,16 @@ export async function submitMeetingArtifact(
     return;
   }
 
+  if (raw_text.length > MAX_RAW_TEXT_LENGTH) {
+    setState?.('submittedEntityId', null);
+    setState?.(
+      'submitError',
+      `Meeting notes are too long (${raw_text.length.toLocaleString()} characters). Please shorten to under ${MAX_RAW_TEXT_LENGTH.toLocaleString()} characters.`
+    );
+    return;
+  }
+
+  submissionInFlight = true;
   setState?.('isSubmitting', true);
   try {
     const { data: entity, error: entityError } = await supabase
@@ -104,6 +125,7 @@ export async function submitMeetingArtifact(
     setState?.('submittedEntityId', null);
     setState?.('submitError', `Failed to submit meeting artifact: ${message}`);
   } finally {
+    submissionInFlight = false;
     setState?.('isSubmitting', false);
   }
 }
