@@ -5,7 +5,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { UIEngine } from '@/engine';
 import debateArenaPage from '@/pages/debate-arena.json';
-import { submitDebate, updateTopic } from '@/engine/customHandlers/debateArena';
+import { submitDebate, updateTopic, retryDebate } from '@/engine/customHandlers/debateArena';
 import type { PageDefinition } from '@/engine/types';
 
 export const Route = createFileRoute('/debate-arena')({
@@ -18,7 +18,7 @@ function DebateArenaPage() {
   return (
     <UIEngine
       page={debateArenaPage as PageDefinition}
-      customHandlers={{ submitDebate, updateTopic }}
+      customHandlers={{ submitDebate, updateTopic, retryDebate }}
       initialState={{ submittedDebateId: entityId }}
     />
   );

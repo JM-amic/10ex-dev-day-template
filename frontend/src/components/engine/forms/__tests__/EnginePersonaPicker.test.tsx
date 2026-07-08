@@ -106,4 +106,11 @@ describe('EnginePersonaPicker', () => {
     const optimist = screen.getByText('The optimist').closest('button');
     expect(optimist).not.toBeDisabled();
   });
+
+  it('renders without crashing when personas is explicitly null (the pre-load state of a supabase data source)', () => {
+    // useDataSources resolves an unresolved query to `null`, not `undefined` -- a
+    // `personas = []` default parameter alone does not cover this case.
+    expect(() => renderPicker({ personas: null as unknown as typeof ALL_PERSONAS })).not.toThrow();
+    expect(screen.queryByText('Classical')).not.toBeInTheDocument();
+  });
 });

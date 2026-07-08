@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { submitDebate, updateTopic } from '../debateArena';
+import { submitDebate, retryDebate, updateTopic } from '../debateArena';
 import type { ExpressionContext } from '../../types';
 
-// Mutable results the mocked supabase client returns, controlled per-test.
+// Mutable results the mocked supabase client returns, controlled per-test. `entityVersionInserts`
+// captures every payload passed to `entity_versions.insert(...)` so tests can assert on the real
+// submitted data, not just "fetch was called".
 const supabaseState = vi.hoisted(() => ({
   entities: { data: { id: 'd1' } as unknown, error: null as unknown },
   entityVersions: { error: null as unknown },
+  entityVersionInserts: [] as unknown[],
 }));
 
 vi.mock('@/data/supabase', () => ({
@@ -22,7 +25,10 @@ vi.mock('@/data/supabase', () => ({
       }
       if (table === 'entity_versions') {
         return {
-          insert: () => Promise.resolve(supabaseState.entityVersions),
+          insert: (payload: unknown) => {
+            supabaseState.entityVersionInserts.push(payload);
+            return Promise.resolve(supabaseState.entityVersions);
+          },
         };
       }
       throw new Error(`unexpected table: ${table}`);
@@ -61,10 +67,16 @@ function makeContext(overrides: Partial<ExpressionContext> = {}): ExpressionCont
   };
 }
 
+function lastInsertedData(): Record<string, unknown> {
+  const inserts = supabaseState.entityVersionInserts as { data: Record<string, unknown> }[];
+  return inserts[inserts.length - 1].data;
+}
+
 describe('submitDebate', () => {
   beforeEach(() => {
     supabaseState.entities = { data: { id: 'd1' }, error: null };
     supabaseState.entityVersions = { error: null };
+    supabaseState.entityVersionInserts = [];
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
   });
 
@@ -102,7 +114,27 @@ describe('submitDebate', () => {
 
     await submitDebate({ round_count: '3' }, context);
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    const inserted = lastInsertedData();
+    expect(inserted.topic).toBe('Should we ship on Friday?');
+    expect((inserted.selected_personas as { key: string }[]).map((p) => p.key)).toEqual([
+      'skeptic',
+      'wizard',
+      'pragmatist',
+    ]);
+    expect((inserted.judge_persona as { key: string }).key).toBe('judge');
+    expect(inserted.processing_status).toBe('pending');
+    expect(inserted.current_round).toBe(0);
+  });
+
+  it('excludes unselected personas from selected_personas even when present in context.data.personas', async () => {
+    const context = makeContext({
+      state: { topic: 'Topic', selectedPersonaKeys: ['skeptic'] },
+    });
+
+    await submitDebate({ round_count: '2' }, context);
+
+    const inserted = lastInsertedData();
+    expect((inserted.selected_personas as { key: string }[]).map((p) => p.key)).toEqual(['skeptic']);
   });
 
   it('defaults round_count to 3 (not NaN) when state.roundCount is left at its default', async () => {
@@ -110,9 +142,17 @@ describe('submitDebate', () => {
 
     await submitDebate({ round_count: '3' }, context);
 
-    // No direct way to inspect the entity_versions insert payload with this mock shape,
-    // so we assert indirectly: submission succeeds and doesn't error out on NaN.
     expect(context.setState).toHaveBeenCalledWith('submitError', null);
+    expect(lastInsertedData().round_count).toBe(3);
+  });
+
+  it('converts round_count to a number regardless of which value is submitted', async () => {
+    const context = makeContext();
+
+    await submitDebate({ round_count: '4' }, context);
+
+    expect(lastInsertedData().round_count).toBe(4);
+    expect(Number.isNaN(lastInsertedData().round_count)).toBe(false);
   });
 
   it('reports an error and skips the trigger when the entities insert fails', async () => {
@@ -176,6 +216,101 @@ describe('submitDebate', () => {
     const offIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === false);
     expect(onIdx).toBeGreaterThanOrEqual(0);
     expect(offIdx).toBeGreaterThan(onIdx);
+  });
+
+  it('ignores a second submission fired before the first one has left the synchronous guard', async () => {
+    const context = makeContext();
+
+    const first = submitDebate({ round_count: '3' }, context);
+    const second = submitDebate({ round_count: '3' }, context);
+    await Promise.all([first, second]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const setStateMock = context.setState as unknown as ReturnType<typeof vi.fn>;
+    const submittingOnCalls = setStateMock.mock.calls.filter(
+      ([key, val]) => key === 'isSubmitting' && val === true
+    );
+    expect(submittingOnCalls).toHaveLength(1);
+  });
+
+  it('allows a fresh submission once the prior one has finished', async () => {
+    const context = makeContext();
+
+    await submitDebate({ round_count: '3' }, context);
+    await submitDebate({ round_count: '3' }, context);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('retryDebate', () => {
+  beforeEach(() => {
+    supabaseState.entities = { data: { id: 'd2' }, error: null };
+    supabaseState.entityVersions = { error: null };
+    supabaseState.entityVersionInserts = [];
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const persistedDebate = {
+    entity_versions: [
+      {
+        data: {
+          topic: 'the original topic',
+          round_count: 2,
+          selected_personas: [persona('skeptic', 'The Skeptic').entity_versions[0].data],
+          judge_persona: JUDGE.entity_versions[0].data,
+          processing_status: 'error',
+          error_message: 'boom',
+          current_round: 1,
+        },
+      },
+    ],
+  };
+
+  it('resubmits the exact topic/round_count/selected_personas/judge_persona persisted on the errored debate, ignoring stale page state', async () => {
+    // Simulates a reload: submittedDebateId is restored from the URL, but topic/
+    // selectedPersonaKeys are back to their initial empty client-only state.
+    const context = makeContext({
+      state: { topic: '', selectedPersonaKeys: [] },
+      data: { debate: persistedDebate },
+    });
+
+    await retryDebate(undefined, context);
+
+    const inserted = lastInsertedData();
+    expect(inserted.topic).toBe('the original topic');
+    expect(inserted.round_count).toBe(2);
+    expect((inserted.selected_personas as { key: string }[]).map((p) => p.key)).toEqual(['skeptic']);
+    expect((inserted.judge_persona as { key: string }).key).toBe('judge');
+    expect(context.setState).toHaveBeenCalledWith('submittedDebateId', 'd2');
+  });
+
+  it('reports an error and does not insert anything when the original debate data is missing', async () => {
+    const context = makeContext({ data: { debate: undefined } });
+
+    await retryDebate(undefined, context);
+
+    expect(context.setState).toHaveBeenCalledWith('submittedDebateId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('original debate data not found')
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('shares the double-submit guard with submitDebate', async () => {
+    const context = makeContext({ data: { debate: persistedDebate } });
+
+    const first = retryDebate(undefined, context);
+    const second = retryDebate(undefined, context);
+    await Promise.all([first, second]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

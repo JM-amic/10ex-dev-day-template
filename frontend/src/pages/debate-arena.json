@@ -201,8 +201,7 @@
               "disabled": "{{state.isSubmitting}}",
               "onClick": {
                 "action": "custom",
-                "handler": "submitDebate",
-                "payload": { "round_count": "{{state.roundCount}}" }
+                "handler": "retryDebate"
               }
             }
           },
