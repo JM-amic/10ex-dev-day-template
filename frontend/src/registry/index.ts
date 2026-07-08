@@ -20,6 +20,7 @@ import {
   Checkbox,
   Textarea,
   FileInput,
+  PersonaPicker,
   Button,
   Link,
   Alert,
@@ -48,6 +49,7 @@ export function createDefaultRegistry(): ComponentRegistry {
     Checkbox,
     Textarea,
     FileInput,
+    PersonaPicker,
 
     // Actions
     Button,

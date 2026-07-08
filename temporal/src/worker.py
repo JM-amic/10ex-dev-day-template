@@ -9,6 +9,7 @@ from .config import settings
 from .activities import supabase_core, notifications, llm
 from .workflows.example.approval_workflow import ApprovalWorkflow
 from .workflows.meeting_notes.extract_action_items_workflow import ExtractActionItemsWorkflow
+from .workflows.debate_arena.debate_workflow import RunDebateWorkflow
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=settings.temporal_task_queue,
-        workflows=[ApprovalWorkflow, ExtractActionItemsWorkflow],
+        workflows=[ApprovalWorkflow, ExtractActionItemsWorkflow, RunDebateWorkflow],
         activities=[
             supabase_core.create_entity,
             supabase_core.update_entity_scd2,

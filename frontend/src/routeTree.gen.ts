@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as MeetingNotesRouteImport } from './routes/meeting-notes'
+import { Route as DebateArenaRouteImport } from './routes/debate-arena'
 import { Route as IndexRouteImport } from './routes/index'
 
 const MeetingNotesRoute = MeetingNotesRouteImport.update({
   id: '/meeting-notes',
   path: '/meeting-notes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DebateArenaRoute = DebateArenaRouteImport.update({
+  id: '/debate-arena',
+  path: '/debate-arena',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/debate-arena': typeof DebateArenaRoute
   '/meeting-notes': typeof MeetingNotesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/debate-arena': typeof DebateArenaRoute
   '/meeting-notes': typeof MeetingNotesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/debate-arena': typeof DebateArenaRoute
   '/meeting-notes': typeof MeetingNotesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/meeting-notes'
+  fullPaths: '/' | '/debate-arena' | '/meeting-notes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/meeting-notes'
-  id: '__root__' | '/' | '/meeting-notes'
+  to: '/' | '/debate-arena' | '/meeting-notes'
+  id: '__root__' | '/' | '/debate-arena' | '/meeting-notes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DebateArenaRoute: typeof DebateArenaRoute
   MeetingNotesRoute: typeof MeetingNotesRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/meeting-notes'
       fullPath: '/meeting-notes'
       preLoaderRoute: typeof MeetingNotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/debate-arena': {
+      id: '/debate-arena'
+      path: '/debate-arena'
+      fullPath: '/debate-arena'
+      preLoaderRoute: typeof DebateArenaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DebateArenaRoute: DebateArenaRoute,
   MeetingNotesRoute: MeetingNotesRoute,
 }
 export const routeTree = rootRouteImport

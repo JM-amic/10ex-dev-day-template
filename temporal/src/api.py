@@ -16,6 +16,7 @@ from .workflows.meeting_notes.extract_action_items_workflow import (
     ExtractActionItemsRequest,
     ExtractActionItemsWorkflow,
 )
+from .workflows.debate_arena.debate_workflow import RunDebateRequest, RunDebateWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,31 @@ async def extract_action_items(body: ExtractActionItemsBody, request: Request) -
         await client.start_workflow(
             ExtractActionItemsWorkflow.run,
             ExtractActionItemsRequest(entity_id=body.entity_id),
+            id=workflow_id,
+            task_queue=settings.temporal_task_queue,
+        )
+    except WorkflowAlreadyStartedError:
+        return JSONResponse(status_code=202, content={"started": False, "already_running": True})
+    except RPCError as exc:
+        logger.error("Failed to reach Temporal", extra={"error": str(exc)})
+        return JSONResponse(status_code=502, content={"error": "Could not reach Temporal"})
+
+    return JSONResponse(status_code=202, content={"workflow_id": workflow_id, "started": True})
+
+
+class StartDebateBody(BaseModel):
+    entity_id: str = Field(..., min_length=1)
+
+
+@app.post("/workflows/start-debate", status_code=202)
+async def start_debate(body: StartDebateBody, request: Request) -> JSONResponse:
+    client: Client = request.app.state.temporal_client
+    workflow_id = f"start-debate-{body.entity_id}"
+
+    try:
+        await client.start_workflow(
+            RunDebateWorkflow.run,
+            RunDebateRequest(entity_id=body.entity_id),
             id=workflow_id,
             task_queue=settings.temporal_task_queue,
         )

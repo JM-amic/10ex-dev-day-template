@@ -83,3 +83,57 @@ def test_trigger_missing_entity_id():
     # so a future spec update (or a deliberate switch to 400) is a conscious
     # choice, not a silent drift.
     assert resp.status_code == 422
+
+
+def test_start_debate_success():
+    start = AsyncMock(return_value=MagicMock())
+    fake_client = _make_client(start)
+    with patch.object(api.Client, "connect", new=AsyncMock(return_value=fake_client)):
+        with TestClient(api.app) as client:
+            resp = client.post("/workflows/start-debate", json={"entity_id": "debate-1"})
+
+    assert resp.status_code == 202
+    assert resp.json() == {"workflow_id": "start-debate-debate-1", "started": True}
+
+    assert start.call_count == 1
+    args, kwargs = start.call_args
+    assert args[0] == api.RunDebateWorkflow.run
+    assert args[1] == api.RunDebateRequest(entity_id="debate-1")
+    assert kwargs["id"] == "start-debate-debate-1"
+    assert kwargs["task_queue"] == api.settings.temporal_task_queue
+
+
+def test_start_debate_already_running():
+    start = AsyncMock(
+        side_effect=WorkflowAlreadyStartedError("start-debate-debate-1", "RunDebateWorkflow")
+    )
+    fake_client = _make_client(start)
+    with patch.object(api.Client, "connect", new=AsyncMock(return_value=fake_client)):
+        with TestClient(api.app) as client:
+            resp = client.post("/workflows/start-debate", json={"entity_id": "debate-1"})
+
+    assert resp.status_code == 202
+    assert resp.json() == {"started": False, "already_running": True}
+
+
+def test_start_debate_rpc_error():
+    start = AsyncMock(
+        side_effect=RPCError("temporal unavailable", RPCStatusCode.UNAVAILABLE, b"")
+    )
+    fake_client = _make_client(start)
+    with patch.object(api.Client, "connect", new=AsyncMock(return_value=fake_client)):
+        with TestClient(api.app) as client:
+            resp = client.post("/workflows/start-debate", json={"entity_id": "debate-1"})
+
+    assert resp.status_code == 502
+    assert resp.json() == {"error": "Could not reach Temporal"}
+
+
+def test_start_debate_missing_entity_id():
+    fake_client = _make_client(AsyncMock(return_value=MagicMock()))
+    with patch.object(api.Client, "connect", new=AsyncMock(return_value=fake_client)):
+        with TestClient(api.app) as client:
+            resp = client.post("/workflows/start-debate", json={"entity_id": ""})
+
+    # Same pydantic-validates-first behavior as /workflows/extract-action-items.
+    assert resp.status_code == 422

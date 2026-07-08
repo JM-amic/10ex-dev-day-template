@@ -5,7 +5,7 @@
 import { createRootRoute, Outlet, Link, useLocation } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { cn } from '@/lib/utils';
-import { Home, ListChecks } from 'lucide-react';
+import { Home, ListChecks, Swords } from 'lucide-react';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -66,6 +66,19 @@ function Sidebar() {
         >
           <ListChecks className="h-4 w-4" />
           Meeting Notes
+        </Link>
+
+        <Link
+          to="/debate-arena"
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+            location.pathname === '/debate-arena'
+              ? 'bg-primary text-primary-foreground'
+              : 'hover:bg-muted'
+          )}
+        >
+          <Swords className="h-4 w-4" />
+          Debate Arena
         </Link>
       </nav>
     </aside>
