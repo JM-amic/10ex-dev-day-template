@@ -1,0 +1,286 @@
+{
+  "id": "debate-arena",
+  "title": "Multi-Agent Debate Arena",
+  "state": {
+    "topic": "",
+    "topicIsBlank": true,
+    "roundCount": "3",
+    "selectedPersonaKeys": [],
+    "selectedPersonaCountValid": false,
+    "submittedDebateId": null,
+    "submitError": null,
+    "isSubmitting": false
+  },
+  "dataSources": {
+    "personas": {
+      "type": "supabase",
+      "table": "entities",
+      "select": "*, entity_versions(*)",
+      "filters": [
+        { "field": "entity_type", "op": "eq", "value": "debate_persona" },
+        { "field": "source_record_id", "op": "neq", "value": "judge" },
+        { "field": "entity_versions.is_current", "op": "eq", "value": true }
+      ]
+    },
+    "judgePersona": {
+      "type": "supabase",
+      "table": "entities",
+      "select": "*, entity_versions(*)",
+      "filters": [
+        { "field": "entity_type", "op": "eq", "value": "debate_persona" },
+        { "field": "source_record_id", "op": "eq", "value": "judge" },
+        { "field": "entity_versions.is_current", "op": "eq", "value": true }
+      ],
+      "single": true
+    },
+    "debate": {
+      "type": "supabase",
+      "table": "entities",
+      "select": "*, entity_versions(*)",
+      "filters": [
+        { "field": "id", "op": "eq", "value": "{{state.submittedDebateId}}" },
+        { "field": "entity_versions.is_current", "op": "eq", "value": true }
+      ],
+      "single": true,
+      "enabled": "{{state.submittedDebateId}}",
+      "refetchInterval": 2000,
+      "pollUntilPath": "entity_versions[0].data.processing_status",
+      "pollUntilValues": ["done", "error"]
+    },
+    "turns": {
+      "type": "supabase",
+      "table": "relationships_v2",
+      "select": "child_id, created_at, entities!relationships_v2_child_id_fkey(*, entity_versions(*))",
+      "filters": [
+        { "field": "parent_id", "op": "eq", "value": "{{state.submittedDebateId}}" },
+        { "field": "relationship_type", "op": "eq", "value": "debate_has_turn" }
+      ],
+      "order": [{ "column": "created_at", "ascending": true }],
+      "enabled": "{{state.submittedDebateId}}",
+      "refetchInterval": 2000
+    },
+    "verdict": {
+      "type": "supabase",
+      "table": "relationships_v2",
+      "select": "child_id, entities!relationships_v2_child_id_fkey(*, entity_versions(*))",
+      "filters": [
+        { "field": "parent_id", "op": "eq", "value": "{{state.submittedDebateId}}" },
+        { "field": "relationship_type", "op": "eq", "value": "debate_has_verdict" }
+      ],
+      "enabled": "{{state.submittedDebateId}}",
+      "refetchInterval": 2000
+    }
+  },
+  "layout": {
+    "type": "Stack",
+    "props": { "spacing": 6 },
+    "children": [
+      {
+        "type": "Heading",
+        "props": { "level": 1, "children": "Multi-Agent Debate Arena" }
+      },
+      {
+        "type": "Card",
+        "props": { "title": "Start a debate" },
+        "children": [
+          {
+            "type": "Stack",
+            "props": { "spacing": 4 },
+            "children": [
+              {
+                "type": "Textarea",
+                "props": {
+                  "label": "Topic or decision",
+                  "placeholder": "What are you trying to decide?",
+                  "rows": 3,
+                  "value": "{{state.topic}}",
+                  "disabled": "{{state.isSubmitting}}",
+                  "onChange": {
+                    "action": "custom",
+                    "handler": "updateTopic",
+                    "payload": "{{event.target.value}}"
+                  }
+                }
+              },
+              {
+                "type": "Select",
+                "props": {
+                  "label": "Rounds",
+                  "value": "{{state.roundCount}}",
+                  "disabled": "{{state.isSubmitting}}",
+                  "options": [
+                    { "value": "2", "label": "2 rounds" },
+                    { "value": "3", "label": "3 rounds" },
+                    { "value": "4", "label": "4 rounds" }
+                  ],
+                  "onChange": {
+                    "action": "setState",
+                    "key": "roundCount",
+                    "value": "{{event.target.value}}"
+                  }
+                }
+              },
+              {
+                "type": "Text",
+                "props": { "weight": "medium", "children": "Debaters (pick 3-5)" }
+              },
+              {
+                "type": "PersonaPicker",
+                "props": {
+                  "personas": "{{data.personas}}",
+                  "selectedKeys": "{{state.selectedPersonaKeys}}",
+                  "min": 3,
+                  "max": 5,
+                  "onChange": {
+                    "action": "sequence",
+                    "actions": [
+                      { "action": "setState", "key": "selectedPersonaKeys", "value": "{{event.selectedKeys}}" },
+                      { "action": "setState", "key": "selectedPersonaCountValid", "value": "{{event.isValidCount}}" }
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "Button",
+                "props": {
+                  "children": "Start Debate",
+                  "disabled": "{{state.isSubmitting || state.topicIsBlank || !state.selectedPersonaCountValid}}",
+                  "onClick": {
+                    "action": "custom",
+                    "handler": "submitDebate",
+                    "payload": { "round_count": "{{state.roundCount}}" }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Alert",
+        "if": "{{state.submitError}}",
+        "props": {
+          "variant": "destructive",
+          "title": "Submission failed",
+          "description": "{{state.submitError}}"
+        }
+      },
+      {
+        "type": "Stack",
+        "if": "{{state.submittedDebateId}}",
+        "props": { "spacing": 4 },
+        "children": [
+          {
+            "type": "Skeleton",
+            "if": "{{!data.debate}}",
+            "props": { "height": 96 }
+          },
+          {
+            "type": "Text",
+            "if": "{{data.debate}}",
+            "props": {
+              "weight": "medium",
+              "children": "Round {{data.debate.entity_versions[0].data.current_round}} of {{data.debate.entity_versions[0].data.round_count}} · Status: {{data.debate.entity_versions[0].data.processing_status}}"
+            }
+          },
+          {
+            "type": "Alert",
+            "if": "{{data.debate.entity_versions[0].data.processing_status === 'error'}}",
+            "props": {
+              "variant": "destructive",
+              "title": "Debate failed",
+              "description": "{{data.debate.entity_versions[0].data.error_message || 'The workflow reported an error.'}}"
+            }
+          },
+          {
+            "type": "Button",
+            "if": "{{data.debate.entity_versions[0].data.processing_status === 'error'}}",
+            "props": {
+              "variant": "outline",
+              "children": "Try again",
+              "disabled": "{{state.isSubmitting}}",
+              "onClick": {
+                "action": "custom",
+                "handler": "submitDebate",
+                "payload": { "round_count": "{{state.roundCount}}" }
+              }
+            }
+          },
+          {
+            "type": "Card",
+            "props": { "title": "Transcript" },
+            "children": [
+              {
+                "type": "Stack",
+                "props": { "spacing": 3 },
+                "children": [
+                  {
+                    "type": "Stack",
+                    "each": "{{data.turns}}",
+                    "as": "item",
+                    "key": "{{item.child_id}}",
+                    "props": { "spacing": 1, "className": "p-3 border rounded-lg" },
+                    "children": [
+                      {
+                        "type": "Text",
+                        "props": {
+                          "weight": "medium",
+                          "children": "{{item.entities.entity_versions[0].data.persona_emoji}} {{item.entities.entity_versions[0].data.persona_label}} — Round {{item.entities.entity_versions[0].data.round_number}}"
+                        }
+                      },
+                      {
+                        "type": "Text",
+                        "props": {
+                          "as": "div",
+                          "size": "sm",
+                          "variant": "{{item.entities.entity_versions[0].data.is_placeholder ? 'muted' : 'default'}}",
+                          "className": "{{item.entities.entity_versions[0].data.is_placeholder ? 'italic' : ''}}",
+                          "children": "{{item.entities.entity_versions[0].data.argument}}"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Card",
+            "if": "{{data.debate.entity_versions[0].data.processing_status === 'done'}}",
+            "props": { "title": "Verdict" },
+            "children": [
+              {
+                "type": "Stack",
+                "props": { "spacing": 2 },
+                "children": [
+                  {
+                    "type": "Text",
+                    "props": {
+                      "weight": "medium",
+                      "children": "{{data.verdict[0].entities.entity_versions[0].data.persona_emoji}} {{data.verdict[0].entities.entity_versions[0].data.persona_label}}"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "props": {
+                      "as": "div",
+                      "children": "{{data.verdict[0].entities.entity_versions[0].data.summary}}"
+                    }
+                  },
+                  {
+                    "type": "Text",
+                    "props": {
+                      "as": "div",
+                      "weight": "medium",
+                      "children": "Recommendation: {{data.verdict[0].entities.entity_versions[0].data.recommendation}}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ Architectural decisions (data model, orchestration engine, deployment topology, 
 | ADR | Title | Status |
 |---|---|---|
 | [0001](./0001-meeting-notes-workflow-shape-and-model-hosting.md) | Meeting Notes action-item extraction — workflow shape and model hosting | Proposed |
+| [0002](./0002-debate-arena-persona-data-and-concurrent-fanout.md) | Debate Arena — persona roster as seeded data, and concurrent per-round activity fan-out | Proposed |
 
 ## Maintenance note
 

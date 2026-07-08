@@ -20,6 +20,7 @@ export { EngineSelect as Select } from './forms/EngineSelect';
 export { EngineCheckbox as Checkbox } from './forms/EngineCheckbox';
 export { EngineTextarea as Textarea } from './forms/EngineTextarea';
 export { EngineFileInput as FileInput } from './forms/EngineFileInput';
+export { EnginePersonaPicker as PersonaPicker } from './forms/EnginePersonaPicker';
 
 // Actions
 export { EngineButton as Button } from './actions/EngineButton';
