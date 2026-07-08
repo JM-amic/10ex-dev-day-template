@@ -47,7 +47,7 @@ const FLAVOR_LABELS: Record<string, string> = {
 };
 
 export function EnginePersonaPicker({
-  personas = [],
+  personas,
   selectedKeys = [],
   min = 3,
   max = 5,
@@ -56,7 +56,10 @@ export function EnginePersonaPicker({
 }: EnginePersonaPickerProps) {
   const { dispatch } = useUIEngine();
 
-  const pickable = personas
+  // `useDataSources` resolves an unresolved query's data to `null` (not `undefined`)
+  // while it's still loading, so a `personas = []` default parameter alone doesn't
+  // cover the pre-load render -- an explicit `null` bypasses default parameters.
+  const pickable = (personas ?? [])
     .map(personaData)
     .filter((p): p is PersonaData => Boolean(p) && p!.flavor !== 'judge');
 

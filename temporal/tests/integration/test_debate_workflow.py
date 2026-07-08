@@ -295,14 +295,22 @@ async def test_judge_failure_aborts_debate_without_verdict():
     assert [c[0] for c in create_entity_calls] == ["debate_turn", "debate_turn"]  # no debate_verdict
 
 
-async def test_get_entity_failure_surfaces_error_without_crashing():
+async def test_get_entity_failure_still_writes_error_status():
+    """Regression test: a get_entity failure (e.g. the entity's data payload exceeds
+    Temporal's activity result size limit, or the entity doesn't exist) must not leave
+    the debate stuck on 'pending' forever -- an error status has to be written even
+    though `data` was never fetched, mirroring the equivalent meeting-notes fix."""
+    error_calls: list[dict] = []
+
     @activity.defn(name="get_entity")
     async def get_entity(entity_id: str) -> dict:
         raise ApplicationError("could not read debate entity", non_retryable=True)
 
     @activity.defn(name="update_entity_scd2")
     async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
-        raise AssertionError("update_entity_scd2 should not be called: no known version to update")
+        if attributes["processing_status"] == "error":
+            error_calls.append({"version_number": version_number, **attributes})
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
 
     @activity.defn(name="call_model")
     async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
@@ -324,6 +332,67 @@ async def test_get_entity_failure_surfaces_error_without_crashing():
         )
 
     assert result == {"status": "error", "error": "could not read debate entity"}
+    assert len(error_calls) == 1
+    assert error_calls[0]["processing_status"] == "error"
+    assert error_calls[0]["error_message"] == "could not read debate entity"
+    assert error_calls[0]["current_round"] == 0
+    # version_number=1 is the entity's initial row; the error write must use a later version.
+    assert error_calls[0]["version_number"] > 1
+
+
+async def test_current_round_preserved_on_error_mid_debate():
+    """Regression test: an error after round 2 has started must persist
+    current_round=2 on the error record, not revert to the stale current_round=0
+    from the entity's initial data (the bug: `_mark("error", ...)` without threading
+    the in-flight round number through). `call_model` failures are per-persona
+    isolated and never abort the debate, so this forces the abort via a
+    `create_entity` failure while persisting a round-2 turn instead.
+    """
+    personas = _personas(["skeptic", "wizard"])
+    error_calls: list[dict] = []
+
+    @activity.defn(name="get_entity")
+    async def get_entity(entity_id: str) -> dict:
+        return {
+            "entity_id": entity_id,
+            "version_id": "ver-1",
+            "version_number": 1,
+            "data": _debate_data(personas, round_count=3),
+        }
+
+    @activity.defn(name="update_entity_scd2")
+    async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
+        if attributes["processing_status"] == "error":
+            error_calls.append(attributes)
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
+
+    @activity.defn(name="call_model")
+    async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
+        if json_schema and "argument" in json_schema.get("properties", {}):
+            round_num = _round_from_input(input_text)
+            return LLMCallResult(text=json.dumps({"argument": f"argument round {round_num}"}), success=True)
+        raise AssertionError("judge call_model should not be reached")
+
+    @activity.defn(name="create_entity")
+    async def create_entity(entity_type, attributes, created_by, source_record_id) -> EntityResult:
+        if attributes.get("round_number") == 2:
+            raise ApplicationError("supabase unreachable", non_retryable=True)
+        return EntityResult(entity_id=f"entity-{uuid.uuid4()}", version_id="v1")
+
+    @activity.defn(name="create_relationship")
+    async def create_relationship(from_id, to_id, rel_type, attributes) -> dict:
+        return {"relationship_id": str(uuid.uuid4()), "success": True}
+
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        result = await _run(
+            env,
+            [get_entity, update_entity_scd2, call_model, create_entity, create_relationship],
+            entity_id="debate-1",
+        )
+
+    assert result == {"status": "error", "error": "supabase unreachable"}
+    assert len(error_calls) == 1
+    assert error_calls[0]["current_round"] == 2
 
 
 async def test_persistence_failure_mid_debate_surfaces_error():
