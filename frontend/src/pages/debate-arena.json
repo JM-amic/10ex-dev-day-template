@@ -275,7 +275,10 @@
             "children": [
               {
                 "type": "DebateTranscript",
-                "props": { "turns": "{{data.turns}}" }
+                "props": {
+                  "turns": "{{data.turns}}",
+                  "personas": "{{data.debate.entity_versions[0].data.selected_personas}}"
+                }
               }
             ]
           },
