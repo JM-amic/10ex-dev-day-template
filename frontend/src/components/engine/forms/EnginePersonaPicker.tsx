@@ -11,7 +11,9 @@
  * establishes for logic the expression language can't reach.
  */
 
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPersonaColor } from '@/lib/personaColor';
 import type { EngineComponentProps, ActionDefinition } from '@/engine/types';
 import { useUIEngine } from '@/engine/UIEngineContext';
 
@@ -33,6 +35,7 @@ interface EnginePersonaPickerProps extends EngineComponentProps {
   selectedKeys?: string[];
   min?: number;
   max?: number;
+  label?: string;
   onChange?: ActionDefinition;
   className?: string;
 }
@@ -47,22 +50,28 @@ const FLAVOR_LABELS: Record<string, string> = {
 };
 
 export function EnginePersonaPicker({
-  personas = [],
+  personas,
   selectedKeys = [],
   min = 3,
   max = 5,
+  label = 'Debaters',
   onChange,
   className,
 }: EnginePersonaPickerProps) {
   const { dispatch } = useUIEngine();
 
-  const pickable = personas
+  // `useDataSources` resolves an unresolved query's data to `null` (not `undefined`)
+  // while it's still loading, so a `personas = []` default parameter alone doesn't
+  // cover the pre-load render -- an explicit `null` bypasses default parameters.
+  const pickable = (personas ?? [])
     .map(personaData)
     .filter((p): p is PersonaData => Boolean(p) && p!.flavor !== 'judge');
 
   const groups: { flavor: string; personas: PersonaData[] }[] = ['classical', 'unusual']
     .map((flavor) => ({ flavor, personas: pickable.filter((p) => p.flavor === flavor) }))
     .filter((group) => group.personas.length > 0);
+
+  const isValidCount = selectedKeys.length >= min && selectedKeys.length <= max;
 
   const toggle = (key: string) => {
     if (!onChange) return;
@@ -86,15 +95,27 @@ export function EnginePersonaPicker({
 
   return (
     <div className={cn('space-y-4', className)}>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{label}</p>
+        <span
+          className={cn(
+            'text-xs font-medium rounded-full px-2 py-0.5',
+            isValidCount ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
+          )}
+        >
+          {selectedKeys.length} / {min}-{max} selected
+        </span>
+      </div>
       {groups.map((group) => (
         <div key={group.flavor} className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {FLAVOR_LABELS[group.flavor] || group.flavor}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {group.personas.map((persona) => {
               const selected = selectedKeys.includes(persona.key);
               const atCapacity = !selected && selectedKeys.length >= max;
+              const color = getPersonaColor(persona.key);
               return (
                 <button
                   key={persona.key}
@@ -103,16 +124,28 @@ export function EnginePersonaPicker({
                   aria-pressed={selected}
                   onClick={() => toggle(persona.key)}
                   className={cn(
-                    'text-left rounded-lg border p-3 space-y-1 transition-colors',
+                    'relative text-left rounded-xl border p-3 space-y-2 transition-all',
                     selected
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:bg-muted',
-                    atCapacity && 'opacity-50 cursor-not-allowed hover:bg-transparent'
+                      ? cn('border-transparent ring-2', color.ring, color.cardBg)
+                      : 'border-border hover:border-foreground/30 hover:shadow-sm',
+                    atCapacity && 'opacity-50 cursor-not-allowed hover:shadow-none hover:border-border'
                   )}
                 >
-                  <div className="text-2xl leading-none">{persona.emoji}</div>
-                  <div className="text-sm font-medium">{persona.label}</div>
-                  <div className="text-xs text-muted-foreground">{persona.personality}</div>
+                  {selected && (
+                    <span className="absolute top-2 right-2 rounded-full bg-primary text-primary-foreground p-0.5">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                  <div
+                    className={cn(
+                      'flex items-center justify-center h-10 w-10 rounded-full text-xl',
+                      color.avatarBg
+                    )}
+                  >
+                    {persona.emoji}
+                  </div>
+                  <div className="text-sm font-semibold">{persona.label}</div>
+                  <div className="text-xs text-muted-foreground leading-snug">{persona.personality}</div>
                 </button>
               );
             })}

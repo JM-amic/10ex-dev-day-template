@@ -295,14 +295,21 @@ async def test_judge_failure_aborts_debate_without_verdict():
     assert [c[0] for c in create_entity_calls] == ["debate_turn", "debate_turn"]  # no debate_verdict
 
 
-async def test_get_entity_failure_surfaces_error_without_crashing():
+async def test_get_entity_failure_still_writes_error_status():
+    """Regression test: a non-retryable get_entity failure must not leave the
+    workflow failing silently -- an error status has to be written even though
+    `data` was never fetched, mirroring extract_action_items_workflow.py's fallback."""
+    error_calls: list[dict] = []
+
     @activity.defn(name="get_entity")
     async def get_entity(entity_id: str) -> dict:
         raise ApplicationError("could not read debate entity", non_retryable=True)
 
     @activity.defn(name="update_entity_scd2")
     async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
-        raise AssertionError("update_entity_scd2 should not be called: no known version to update")
+        if attributes["processing_status"] == "error":
+            error_calls.append({"version_number": version_number, **attributes})
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
 
     @activity.defn(name="call_model")
     async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
@@ -324,6 +331,11 @@ async def test_get_entity_failure_surfaces_error_without_crashing():
         )
 
     assert result == {"status": "error", "error": "could not read debate entity"}
+    assert len(error_calls) == 1
+    assert error_calls[0]["processing_status"] == "error"
+    assert error_calls[0]["error_message"] == "could not read debate entity"
+    # version_number=1 is the entity's initial row; the fallback error write must use a later version.
+    assert error_calls[0]["version_number"] > 1
 
 
 async def test_persistence_failure_mid_debate_surfaces_error():

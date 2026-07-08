@@ -95,6 +95,22 @@ describe('EnginePersonaPicker', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it('renders without crashing when personas is null (unresolved query, still loading)', () => {
+    const { container } = render(
+      <UIEngineContext.Provider value={{ dispatch: vi.fn() } as unknown as UIEngineContextValue}>
+        <EnginePersonaPicker
+          personas={null as unknown as typeof ALL_PERSONAS}
+          selectedKeys={[]}
+          onChange={{ action: 'setState', key: 'x', value: 1 }}
+        />
+      </UIEngineContext.Provider>
+    );
+
+    expect(screen.queryByText('Classical')).not.toBeInTheDocument();
+    expect(screen.queryByText('The optimist')).not.toBeInTheDocument();
+    expect(container).toBeInTheDocument();
+  });
+
   it('disables unselected cards once max is reached', () => {
     renderPicker({
       selectedKeys: ['optimist', 'skeptic', 'pragmatist', 'contrarian', 'wizard'],

@@ -81,6 +81,7 @@ class RunDebateWorkflow:
     async def run(self, request: RunDebateRequest) -> dict:
         version_number: Optional[int] = None
         data: Optional[Dict[str, Any]] = None
+        current_round_in_flight = 0
 
         async def _mark(status: str, **extra) -> int:
             nonlocal version_number
@@ -112,6 +113,7 @@ class RunDebateWorkflow:
             # pending -> processing transition itself, via the same _mark call every round uses.
             transcript: List[Dict[str, Any]] = []
             for round_number_in_debate in range(1, round_count + 1):
+                current_round_in_flight = round_number_in_debate
                 # Mark BEFORE this round's activities run, so current_round always names the
                 # round currently in flight, never a completed-then-stale round number.
                 await _mark("processing", current_round=round_number_in_debate)
@@ -206,6 +208,31 @@ class RunDebateWorkflow:
             # Activity failures surface as ActivityError, whose own str() is a generic
             # "Activity task failed" -- the real message is chained onto __cause__.
             message = str(exc.__cause__) if exc.__cause__ else str(exc)
-            if version_number is not None and data is not None:
-                await _mark("error", error_message=message)
+            try:
+                if data is None:
+                    raise RuntimeError("entity data was never fetched")
+                await _mark("error", error_message=message, current_round=current_round_in_flight)
+            except Exception:
+                # Either get_entity itself failed (data is None, so _mark can't spread it) or
+                # the primary error write failed too -- fall back to a minimal error record
+                # that doesn't depend on `data` at all, so an error status always gets written.
+                # Entities are always created at version_number=1 right before this workflow is
+                # triggered (see submitDebate), matching the same fallback in
+                # extract_action_items_workflow.py.
+                fallback_version = (version_number or 1) + 1
+                await workflow.execute_activity(
+                    supabase_core.update_entity_scd2,
+                    args=[
+                        request.entity_id,
+                        fallback_version,
+                        {
+                            "processing_status": "error",
+                            "error_message": message,
+                            "current_round": current_round_in_flight,
+                        },
+                        None,
+                    ],
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=SUPABASE_RETRY,
+                )
             return {"status": "error", "error": message}

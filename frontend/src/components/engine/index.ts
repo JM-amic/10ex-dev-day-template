@@ -32,3 +32,4 @@ export { EngineSkeleton as Skeleton } from './feedback/EngineSkeleton';
 
 // Data
 export { EngineBadge as Badge } from './data/EngineBadge';
+export { EngineDebateTranscript as DebateTranscript } from './data/EngineDebateTranscript';

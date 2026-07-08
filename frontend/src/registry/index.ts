@@ -26,6 +26,7 @@ import {
   Alert,
   Skeleton,
   Badge,
+  DebateTranscript,
 } from '@/components/engine';
 
 /**
@@ -61,6 +62,7 @@ export function createDefaultRegistry(): ComponentRegistry {
 
     // Data
     Badge,
+    DebateTranscript,
   });
 
   return registry;

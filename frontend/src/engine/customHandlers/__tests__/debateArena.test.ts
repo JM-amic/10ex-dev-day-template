@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { submitDebate, updateTopic } from '../debateArena';
+import { submitDebate, updateTopic, retryDebate } from '../debateArena';
 import type { ExpressionContext } from '../../types';
 
 // Mutable results the mocked supabase client returns, controlled per-test.
@@ -176,6 +176,90 @@ describe('submitDebate', () => {
     const offIdx = calls.findIndex(([key, val]) => key === 'isSubmitting' && val === false);
     expect(onIdx).toBeGreaterThanOrEqual(0);
     expect(offIdx).toBeGreaterThan(onIdx);
+  });
+
+  it('ignores a second submission that starts while the first is still in flight', async () => {
+    const context1 = makeContext();
+    const context2 = makeContext();
+
+    const first = submitDebate({ round_count: '3' }, context1);
+    const second = submitDebate({ round_count: '3' }, context2);
+    await Promise.all([first, second]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(context2.setState).not.toHaveBeenCalledWith('submittedDebateId', 'd1');
+  });
+});
+
+describe('retryDebate', () => {
+  beforeEach(() => {
+    supabaseState.entities = { data: { id: 'd2' }, error: null };
+    supabaseState.entityVersions = { error: null };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function makeRetryContext(persistedOverrides: Record<string, unknown> = {}): ExpressionContext {
+    return makeContext({
+      state: {},
+      data: {
+        debate: {
+          entity_versions: [
+            {
+              data: {
+                topic: 'Original topic',
+                round_count: 4,
+                selected_personas: [
+                  PERSONAS[0].entity_versions[0].data,
+                  PERSONAS[1].entity_versions[0].data,
+                ],
+                judge_persona: JUDGE.entity_versions[0].data,
+                ...persistedOverrides,
+              },
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  it('resubmits the persisted topic/round_count/personas as a new debate entity, ignoring page state', async () => {
+    const context = makeRetryContext();
+
+    await retryDebate(undefined, context);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(context.setState).toHaveBeenCalledWith('submittedDebateId', 'd2');
+    expect(context.setState).toHaveBeenCalledWith('submitError', null);
+  });
+
+  it('reports an error and skips the trigger when the persisted debate data is missing required fields', async () => {
+    const context = makeRetryContext({ topic: undefined });
+
+    await retryDebate(undefined, context);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(context.setState).toHaveBeenCalledWith('submittedDebateId', null);
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('original debate data not found')
+    );
+  });
+
+  it('reports an error when context.data.debate itself is missing', async () => {
+    const context = makeContext({ data: { personas: PERSONAS, judgePersona: JUDGE } });
+
+    await retryDebate(undefined, context);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(context.setState).toHaveBeenCalledWith(
+      'submitError',
+      expect.stringContaining('original debate data not found')
+    );
   });
 });
 
