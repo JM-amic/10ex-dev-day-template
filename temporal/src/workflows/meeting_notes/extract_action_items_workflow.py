@@ -52,14 +52,11 @@ class ExtractActionItemsRequest:
 class ExtractActionItemsWorkflow:
     @workflow.run
     async def run(self, request: ExtractActionItemsRequest) -> dict:
-        entity = await workflow.execute_activity(
-            supabase_core.get_entity,
-            args=[request.entity_id],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=SUPABASE_RETRY,
-        )
-        version_number = entity["version_number"]
-        data = entity["data"]
+        # Entities are always created at version_number=1 right before this workflow is
+        # triggered (see submitMeetingArtifact), so this is a safe fallback for marking
+        # an error if get_entity itself never returns.
+        version_number = 1
+        data: dict = {}
 
         async def _mark(status: str, **extra) -> int:
             nonlocal version_number
@@ -72,9 +69,18 @@ class ExtractActionItemsWorkflow:
             )
             return version_number
 
-        await _mark("processing")
-
         try:
+            entity = await workflow.execute_activity(
+                supabase_core.get_entity,
+                args=[request.entity_id],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=SUPABASE_RETRY,
+            )
+            version_number = entity["version_number"]
+            data = entity["data"]
+
+            await _mark("processing")
+
             result = await workflow.execute_activity(
                 llm.call_model,
                 args=[data["raw_text"], EXTRACTION_SYSTEM_PROMPT, ACTION_ITEMS_SCHEMA],
@@ -113,5 +119,17 @@ class ExtractActionItemsWorkflow:
             # Activity failures surface as ActivityError, whose own str() is a generic
             # "Activity task failed" -- the real message is chained onto __cause__.
             message = str(exc.__cause__) if exc.__cause__ else str(exc)
-            await _mark("error", error_message=message)
+            try:
+                await _mark("error", error_message=message)
+            except Exception:
+                # _mark itself failed -- most likely because `data` (e.g. a huge raw_text)
+                # blows past Temporal's payload size limit on the way back out. Fall back to
+                # a minimal error record that doesn't require re-sending `data` at all, so an
+                # error status always gets written no matter how the failure happened.
+                await workflow.execute_activity(
+                    supabase_core.update_entity_scd2,
+                    args=[request.entity_id, version_number + 1, {"processing_status": "error", "error_message": message}, None],
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=SUPABASE_RETRY,
+                )
             return {"status": "error", "error": message}
