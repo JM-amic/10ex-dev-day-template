@@ -21,6 +21,7 @@ interface PersonaRow {
 interface DebateEntityData {
   topic: string;
   round_count: number;
+  language: string;
   selected_personas: PersonaData[];
   judge_persona: PersonaData;
 }
@@ -118,7 +119,7 @@ export async function submitDebate(
   payload: unknown,
   context: ExpressionContext
 ): Promise<void> {
-  const { round_count } = (payload || {}) as { round_count?: string };
+  const { round_count, language } = (payload || {}) as { round_count?: string; language?: string };
   const setState = context.setState;
 
   const topic = (context.state.topic as string) || '';
@@ -138,7 +139,7 @@ export async function submitDebate(
   }
 
   await insertDebateAndTrigger(
-    { topic, round_count: Number(round_count), selected_personas, judge_persona },
+    { topic, round_count: Number(round_count), language: language || 'English', selected_personas, judge_persona },
     setState
   );
 }
@@ -171,6 +172,7 @@ export async function retryDebate(
     {
       topic: persisted.topic,
       round_count: persisted.round_count,
+      language: persisted.language || 'English',
       selected_personas: persisted.selected_personas,
       judge_persona: persisted.judge_persona,
     },

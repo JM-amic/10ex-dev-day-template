@@ -40,6 +40,9 @@ temporal/.pytest_cache/
 # OS/editor
 .DS_Store
 
+# Local agent tooling
+.claude/
+
 # Node tooling
 node_modules
 temporal/worker/node_modules

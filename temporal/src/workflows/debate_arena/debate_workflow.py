@@ -3,7 +3,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -18,8 +18,11 @@ MODEL_RETRY = RetryPolicy(maximum_attempts=3)
 
 TURN_SCHEMA = {
     "type": "object",
-    "properties": {"argument": {"type": "string"}},
-    "required": ["argument"],
+    "properties": {
+        "headline": {"type": "string"},
+        "argument": {"type": "string"},
+    },
+    "required": ["headline", "argument"],
     "additionalProperties": False,
 }
 
@@ -45,14 +48,18 @@ def _format_transcript(transcript: List[Dict[str, Any]]) -> str:
     return "\n".join(f"Round {t['round']} -- {t['label']}: {t['argument']}" for t in transcript)
 
 
-def _persona_system_prompt(persona: Dict[str, Any], topic: str) -> str:
+def _persona_system_prompt(persona: Dict[str, Any], topic: str, language: str) -> str:
     return (
         f"You are {persona['label']}, a debate persona. Personality: "
         f"{persona.get('personality', '')} {persona['stance_prompt']} "
         f'You are participating in a multi-persona debate about: "{topic}". '
         "Write your argument for this round in your own voice, directly addressing the topic "
         "and, where relevant, engaging with what other personas have argued so far. "
-        "Keep it focused and concrete -- a paragraph, not an essay."
+        "Keep it focused and concrete -- a paragraph, not an essay. "
+        "Also provide a `headline`: a single punchy sentence (max ~12 words) that captures "
+        "the essence of your argument, so a reader can skim the debate at a glance. "
+        f"Write both the headline and the argument entirely in {language}, regardless of the "
+        "language of the topic or of the other personas' arguments."
     )
 
 
@@ -65,13 +72,14 @@ def _round_input(topic: str, transcript_text: str, round_number: int, round_coun
     )
 
 
-def _judge_system_prompt(judge: Dict[str, Any], topic: str) -> str:
+def _judge_system_prompt(judge: Dict[str, Any], topic: str, language: str) -> str:
     return (
         f'You are {judge["label"]}, the impartial judge of a multi-persona debate about: "{topic}". '
         f"{judge.get('personality', '')} {judge['stance_prompt']} "
         "Read the full transcript below and weigh every argument on its merits. Then produce a "
         "fair, concise verdict: a summary of the strongest points made on each side, and a "
-        "concrete, actionable recommendation for the person who posed this topic."
+        "concrete, actionable recommendation for the person who posed this topic. "
+        f"Write your entire verdict (both summary and recommendation) in {language}."
     )
 
 
@@ -108,6 +116,8 @@ class RunDebateWorkflow:
             judge: Dict[str, Any] = data["judge_persona"]
             round_count: int = data["round_count"]
             topic: str = data["topic"]
+            # Older debates predate the language selector; default to English.
+            language: str = data.get("language") or "English"
 
             # No separate pre-loop "processing" mark: round 1's iteration below performs the
             # pending -> processing transition itself, via the same _mark call every round uses.
@@ -119,9 +129,12 @@ class RunDebateWorkflow:
                 await _mark("processing", current_round=round_number_in_debate)
                 transcript_text = _format_transcript(transcript)
 
-                async def run_turn(persona: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str], Optional[str]]:
-                    system = _persona_system_prompt(persona, topic)
+                async def run_turn(persona: Dict[str, Any]) -> Dict[str, Any]:
+                    system = _persona_system_prompt(persona, topic, language)
                     input_text = _round_input(topic, transcript_text, round_number_in_debate, round_count)
+                    argument: Optional[str] = None
+                    headline = ""
+                    error: Optional[str] = None
                     try:
                         result = await workflow.execute_activity(
                             llm.call_model,
@@ -130,13 +143,14 @@ class RunDebateWorkflow:
                             retry_policy=MODEL_RETRY,
                         )
                         if not result.success:
-                            return persona, None, result.error
-                        return persona, json.loads(result.text)["argument"], None
+                            error = result.error
+                        else:
+                            parsed = json.loads(result.text)
+                            argument = parsed["argument"]
+                            headline = parsed.get("headline", "")
                     except Exception as exc:  # noqa: BLE001 -- per-persona isolation, see ADR-0002
-                        return persona, None, str(exc.__cause__ or exc)
+                        error = str(exc.__cause__ or exc)
 
-                results = await asyncio.gather(*(run_turn(p) for p in personas))
-                for persona, argument, error in results:
                     text = (
                         argument
                         if argument is not None
@@ -151,6 +165,7 @@ class RunDebateWorkflow:
                                 "persona_key": persona["key"],
                                 "persona_label": persona["label"],
                                 "persona_emoji": persona["emoji"],
+                                "headline": headline,
                                 "argument": text,
                                 "is_placeholder": argument is None,
                             },
@@ -166,11 +181,14 @@ class RunDebateWorkflow:
                         start_to_close_timeout=ACTIVITY_TIMEOUT,
                         retry_policy=SUPABASE_RETRY,
                     )
-                    transcript.append({"round": round_number_in_debate, "label": persona["label"], "argument": text})
+                    return {"round": round_number_in_debate, "label": persona["label"], "argument": text}
+
+                results = await asyncio.gather(*(run_turn(p) for p in personas))
+                transcript.extend(results)
 
             verdict_result = await workflow.execute_activity(
                 llm.call_model,
-                args=[_format_transcript(transcript), _judge_system_prompt(judge, topic), VERDICT_SCHEMA],
+                args=[_format_transcript(transcript), _judge_system_prompt(judge, topic, language), VERDICT_SCHEMA],
                 start_to_close_timeout=MODEL_TIMEOUT,
                 retry_policy=MODEL_RETRY,
             )

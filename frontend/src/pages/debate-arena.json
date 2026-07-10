@@ -5,6 +5,7 @@
     "topic": "",
     "topicIsBlank": true,
     "roundCount": "3",
+    "language": "English",
     "selectedPersonaKeys": [],
     "selectedPersonaCountValid": false,
     "submittedDebateId": null,
@@ -159,6 +160,26 @@
                 ]
               },
               {
+                "type": "Select",
+                "props": {
+                  "label": "Language",
+                  "value": "{{state.language}}",
+                  "disabled": "{{state.isSubmitting}}",
+                  "options": [
+                    { "value": "English", "label": "English" },
+                    { "value": "German", "label": "Deutsch" },
+                    { "value": "French", "label": "Français" },
+                    { "value": "Spanish", "label": "Español" },
+                    { "value": "Italian", "label": "Italiano" }
+                  ],
+                  "onChange": {
+                    "action": "setState",
+                    "key": "language",
+                    "value": "{{event.target.value}}"
+                  }
+                }
+              },
+              {
                 "type": "PersonaPicker",
                 "props": {
                   "label": "Debaters",
@@ -184,7 +205,7 @@
                   "onClick": {
                     "action": "custom",
                     "handler": "submitDebate",
-                    "payload": { "round_count": "{{state.roundCount}}" }
+                    "payload": { "round_count": "{{state.roundCount}}", "language": "{{state.language}}" }
                   }
                 }
               }
@@ -241,7 +262,7 @@
                 "props": {
                   "variant": "muted",
                   "size": "sm",
-                  "children": "Round {{data.debate.entity_versions[0].data.current_round}} of {{data.debate.entity_versions[0].data.round_count}}"
+                  "children": "Round {{data.debate.entity_versions[0].data.current_round}} of {{data.debate.entity_versions[0].data.round_count}} · {{data.debate.entity_versions[0].data.language}}"
                 }
               }
             ]
@@ -277,7 +298,10 @@
                 "type": "DebateTranscript",
                 "props": {
                   "turns": "{{data.turns}}",
-                  "personas": "{{data.debate.entity_versions[0].data.selected_personas}}"
+                  "personas": "{{data.debate.entity_versions[0].data.selected_personas}}",
+                  "status": "{{data.debate.entity_versions[0].data.processing_status}}",
+                  "currentRound": "{{data.debate.entity_versions[0].data.current_round}}",
+                  "roundCount": "{{data.debate.entity_versions[0].data.round_count}}"
                 }
               }
             ]

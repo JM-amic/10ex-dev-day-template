@@ -6,6 +6,7 @@ import type { ExpressionContext } from '../../types';
 const supabaseState = vi.hoisted(() => ({
   entities: { data: { id: 'd1' } as unknown, error: null as unknown },
   entityVersions: { error: null as unknown },
+  lastVersionInsert: null as Record<string, unknown> | null,
 }));
 
 vi.mock('@/data/supabase', () => ({
@@ -22,7 +23,10 @@ vi.mock('@/data/supabase', () => ({
       }
       if (table === 'entity_versions') {
         return {
-          insert: () => Promise.resolve(supabaseState.entityVersions),
+          insert: (payload: Record<string, unknown>) => {
+            supabaseState.lastVersionInsert = payload;
+            return Promise.resolve(supabaseState.entityVersions);
+          },
         };
       }
       throw new Error(`unexpected table: ${table}`);
@@ -65,12 +69,31 @@ describe('submitDebate', () => {
   beforeEach(() => {
     supabaseState.entities = { data: { id: 'd1' }, error: null };
     supabaseState.entityVersions = { error: null };
+    supabaseState.lastVersionInsert = null;
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('persists the selected language in the inserted version data', async () => {
+    const context = makeContext();
+
+    await submitDebate({ round_count: '3', language: 'German' }, context);
+
+    const data = supabaseState.lastVersionInsert?.data as Record<string, unknown>;
+    expect(data.language).toBe('German');
+  });
+
+  it('defaults language to English when the payload omits it', async () => {
+    const context = makeContext();
+
+    await submitDebate({ round_count: '3' }, context);
+
+    const data = supabaseState.lastVersionInsert?.data as Record<string, unknown>;
+    expect(data.language).toBe('English');
   });
 
   it('inserts entity + version, triggers the workflow, and reports success', async () => {
@@ -195,6 +218,7 @@ describe('retryDebate', () => {
   beforeEach(() => {
     supabaseState.entities = { data: { id: 'd2' }, error: null };
     supabaseState.entityVersions = { error: null };
+    supabaseState.lastVersionInsert = null;
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 202 })));
   });
 
@@ -235,6 +259,24 @@ describe('retryDebate', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(context.setState).toHaveBeenCalledWith('submittedDebateId', 'd2');
     expect(context.setState).toHaveBeenCalledWith('submitError', null);
+  });
+
+  it('carries the persisted language forward on retry', async () => {
+    const context = makeRetryContext({ language: 'French' });
+
+    await retryDebate(undefined, context);
+
+    const data = supabaseState.lastVersionInsert?.data as Record<string, unknown>;
+    expect(data.language).toBe('French');
+  });
+
+  it('defaults language to English when retrying a debate that predates the language field', async () => {
+    const context = makeRetryContext();
+
+    await retryDebate(undefined, context);
+
+    const data = supabaseState.lastVersionInsert?.data as Record<string, unknown>;
+    expect(data.language).toBe('English');
   });
 
   it('reports an error and skips the trigger when the persisted debate data is missing required fields', async () => {

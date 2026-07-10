@@ -40,8 +40,8 @@ JUDGE = {
 }
 
 
-def _debate_data(personas, round_count=2, topic="Should we ship on Friday?"):
-    return {
+def _debate_data(personas, round_count=2, topic="Should we ship on Friday?", language=None):
+    data = {
         "topic": topic,
         "round_count": round_count,
         "selected_personas": personas,
@@ -49,6 +49,9 @@ def _debate_data(personas, round_count=2, topic="Should we ship on Friday?"):
         "processing_status": "pending",
         "current_round": 0,
     }
+    if language is not None:
+        data["language"] = language
+    return data
 
 
 def _round_from_input(input_text: str) -> int | None:
@@ -96,7 +99,12 @@ async def test_happy_path():
         if json_schema and "argument" in json_schema.get("properties", {}):
             round_num = _round_from_input(input_text)
             event_log.append(("call_model_turn", round_num))
-            return LLMCallResult(text=json.dumps({"argument": f"argument text round {round_num}"}), success=True)
+            return LLMCallResult(
+                text=json.dumps(
+                    {"argument": f"argument text round {round_num}", "headline": f"headline round {round_num}"}
+                ),
+                success=True,
+            )
         event_log.append(("call_model_verdict",))
         return LLMCallResult(
             text=json.dumps({"summary": "summary text", "recommendation": "recommendation text"}),
@@ -160,6 +168,7 @@ async def test_happy_path():
         assert attributes["persona_key"] in {p["key"] for p in personas}
         assert attributes["round_number"] in (1, 2)
         assert attributes["argument"].startswith("argument text round")
+        assert attributes["headline"] == f"headline round {attributes['round_number']}"
         assert attributes["is_placeholder"] is False
 
     assert verdict_creates[0][1]["persona_key"] == "judge"
@@ -173,6 +182,103 @@ async def test_happy_path():
     assert len(verdict_relationships) == 1
     for from_id, _, _ in turn_relationships + verdict_relationships:
         assert from_id == "debate-1"
+
+
+async def test_selected_language_injected_into_every_prompt():
+    personas = _personas(["skeptic", "wizard"])
+    turn_systems: list[str] = []
+    verdict_systems: list[str] = []
+
+    @activity.defn(name="get_entity")
+    async def get_entity(entity_id: str) -> dict:
+        return {
+            "entity_id": entity_id,
+            "version_id": "ver-1",
+            "version_number": 1,
+            "data": _debate_data(personas, round_count=2, language="German"),
+        }
+
+    @activity.defn(name="update_entity_scd2")
+    async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
+
+    @activity.defn(name="call_model")
+    async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
+        if json_schema and "argument" in json_schema.get("properties", {}):
+            turn_systems.append(system or "")
+            return LLMCallResult(text=json.dumps({"argument": "arg"}), success=True)
+        verdict_systems.append(system or "")
+        return LLMCallResult(
+            text=json.dumps({"summary": "s", "recommendation": "r"}),
+            success=True,
+        )
+
+    @activity.defn(name="create_entity")
+    async def create_entity(entity_type, attributes, created_by, source_record_id) -> EntityResult:
+        return EntityResult(entity_id=f"entity-{uuid.uuid4()}", version_id="v1")
+
+    @activity.defn(name="create_relationship")
+    async def create_relationship(from_id, to_id, rel_type, attributes) -> dict:
+        return {"relationship_id": str(uuid.uuid4()), "success": True}
+
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        result = await _run(
+            env,
+            [get_entity, update_entity_scd2, call_model, create_entity, create_relationship],
+        )
+
+    assert result["status"] == "done"
+    # Every persona turn (2 personas x 2 rounds) and the single verdict prompt must
+    # carry the selected language.
+    assert len(turn_systems) == 4
+    assert all("German" in system for system in turn_systems)
+    assert len(verdict_systems) == 1
+    assert "German" in verdict_systems[0]
+
+
+async def test_language_defaults_to_english_when_absent():
+    personas = _personas(["skeptic", "wizard"])
+    turn_systems: list[str] = []
+
+    @activity.defn(name="get_entity")
+    async def get_entity(entity_id: str) -> dict:
+        return {
+            "entity_id": entity_id,
+            "version_id": "ver-1",
+            "version_number": 1,
+            "data": _debate_data(personas, round_count=1),  # no language key
+        }
+
+    @activity.defn(name="update_entity_scd2")
+    async def update_entity_scd2(entity_id, version_number, attributes, updated_by):
+        return EntityResult(entity_id=entity_id, version_id=f"ver-{version_number}")
+
+    @activity.defn(name="call_model")
+    async def call_model(input_text, system=None, json_schema=None) -> LLMCallResult:
+        if json_schema and "argument" in json_schema.get("properties", {}):
+            turn_systems.append(system or "")
+            return LLMCallResult(text=json.dumps({"argument": "arg"}), success=True)
+        return LLMCallResult(
+            text=json.dumps({"summary": "s", "recommendation": "r"}),
+            success=True,
+        )
+
+    @activity.defn(name="create_entity")
+    async def create_entity(entity_type, attributes, created_by, source_record_id) -> EntityResult:
+        return EntityResult(entity_id=f"entity-{uuid.uuid4()}", version_id="v1")
+
+    @activity.defn(name="create_relationship")
+    async def create_relationship(from_id, to_id, rel_type, attributes) -> dict:
+        return {"relationship_id": str(uuid.uuid4()), "success": True}
+
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        result = await _run(
+            env,
+            [get_entity, update_entity_scd2, call_model, create_entity, create_relationship],
+        )
+
+    assert result["status"] == "done"
+    assert all("English" in system for system in turn_systems)
 
 
 async def test_one_persona_failure_isolated_to_its_own_turn():
