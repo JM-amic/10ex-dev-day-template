@@ -74,8 +74,17 @@ function TurnBubble({ data }: { data: TurnData }) {
   const argRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(raf);
+    // Double rAF: paint the hidden initial state (opacity-0/translate-y) on one
+    // frame, then flip to visible on the next, so the browser has a "from" value
+    // to transition off of and the bubble glides in rather than snapping.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setVisible(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -151,9 +160,11 @@ export function EngineDebateTranscript({
 }: EngineDebateTranscriptProps) {
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [manuallyExpanded, setManuallyExpanded] = useState<Set<number>>(new Set());
+  const [newBelow, setNewBelow] = useState(0);
   const scheduledRef = useRef<Set<string>>(new Set());
   const timersRef = useRef<number[]>([]);
-  const nearBottomRef = useRef(true);
+  const bottomVisibleRef = useRef(true);
+  const prevRevealRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const resolved: ResolvedTurn[] = (turns ?? [])
@@ -176,7 +187,7 @@ export function EngineDebateTranscript({
     const pending = orderedKeys.filter((k) => !scheduledRef.current.has(k));
     if (pending.length === 0) return;
 
-    const stagger = pending.length >= 5 ? 100 : 450;
+    const stagger = pending.length >= 5 ? 300 : 1000;
     pending.forEach((k, i) => {
       scheduledRef.current.add(k);
       const id = window.setTimeout(() => {
@@ -193,17 +204,24 @@ export function EngineDebateTranscript({
 
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
-  // Track the user's scroll position so a newly-revealed turn only pulls the
-  // page down when they were already near the bottom; if they scrolled up to
-  // re-read, we leave them there.
+  // Watch whether the newest content (the bottom sentinel) is on screen. We
+  // never move the reader ourselves, so this only drives the "jump to latest"
+  // pill: when they've scrolled up to re-read an earlier turn, freshly-revealed
+  // turns pile up below the fold and the pill offers a way back down. Reaching
+  // the bottom (sentinel visible) clears the counter.
   useEffect(() => {
-    const onScroll = () => {
-      nearBottomRef.current =
-        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 200;
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    const el = bottomRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries[0]?.isIntersecting ?? false;
+        bottomVisibleRef.current = visible;
+        if (visible) setNewBelow(0);
+      },
+      { rootMargin: '0px 0px -40px 0px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   // Group turns by round, preserving arrival order within a round. When
@@ -249,15 +267,24 @@ export function EngineDebateTranscript({
     });
 
   const revealCount = revealedKeys.size;
-  const thinkingCount = thinkingPersonas.length;
 
-  // Gently keep the newest content in view as it reveals -- only if the user
-  // was near the bottom when it arrived (captured pre-update by nearBottomRef).
+  // Count turns that revealed below the fold while the reader was elsewhere.
+  // bottomVisibleRef still holds the pre-growth visibility here (the observer
+  // callback for the freshly-grown layout hasn't run yet at this synchronous
+  // point), so a turn arriving while the reader sits at the bottom doesn't
+  // spuriously trip the pill.
   useEffect(() => {
-    if (nearBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const delta = revealCount - prevRevealRef.current;
+    prevRevealRef.current = revealCount;
+    if (delta > 0 && !bottomVisibleRef.current) {
+      setNewBelow((n) => n + delta);
     }
-  }, [revealCount, thinkingCount]);
+  }, [revealCount]);
+
+  const jumpToLatest = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    setNewBelow(0);
+  };
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -380,6 +407,17 @@ export function EngineDebateTranscript({
       })}
 
       <div ref={bottomRef} />
+
+      {newBelow > 0 && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-full bg-foreground text-background px-3 py-1.5 text-xs font-medium shadow-lg hover:opacity-90 transition-opacity"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+          {newBelow} new
+        </button>
+      )}
     </div>
   );
 }
